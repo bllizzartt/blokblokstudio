@@ -4,8 +4,8 @@ import { getLocale, getMessages } from 'next-intl/server';
 import './globals.css';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { CustomCursor } from '@/components/CustomCursor';
 import { OrganizationSchema, WebsiteSchema } from './structured-data';
+import { StarFieldWrapper } from '@/components/StarFieldWrapper';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://blokblokstudio.com'),
@@ -93,7 +93,7 @@ export default async function RootLayout({
         <OrganizationSchema />
         <WebsiteSchema />
         <NextIntlClientProvider messages={messages}>
-          <CustomCursor />
+          <StarFieldWrapper />
           <Navbar />
           <main className="min-h-screen">{children}</main>
           <Footer />
