@@ -1,8 +1,8 @@
 'use client';
 
-import { useRef, useMemo, useEffect, useState } from 'react';
+import { useRef, useMemo, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Sphere, OrbitControls, Line } from '@react-three/drei';
+import { OrbitControls, Line } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface ClientLocation {
@@ -27,7 +27,7 @@ function latLngToVector3(lat: number, lng: number, radius: number): [number, num
   return [x, y, z];
 }
 
-// Continent outlines as [lng, lat] pairs — more detailed for recognizable shapes
+// Continent outlines as [lng, lat] pairs
 const continents: number[][][] = [
   // North America
   [[-130,50],[-125,55],[-122,58],[-120,60],[-117,63],[-115,65],[-110,68],[-105,70],[-100,72],[-95,70],[-90,68],[-85,66],[-80,65],[-75,62],[-70,58],[-68,52],[-65,48],[-67,44],[-70,42],[-72,40],[-75,38],[-78,35],[-80,32],[-82,30],[-85,29],[-88,28],[-90,28],[-92,27],[-95,26],[-97,26],[-100,28],[-103,30],[-105,31],[-108,32],[-110,32],[-113,31],[-115,32],[-117,33],[-118,34],[-120,35],[-122,38],[-124,40],[-125,42],[-126,45],[-128,48],[-130,50]],
@@ -40,9 +40,9 @@ const continents: number[][][] = [
   // Africa
   [[-15,12],[-17,14],[-16,18],[-14,22],[-10,26],[-8,30],[-5,33],[-2,35],[0,36],[5,37],[10,37],[12,36],[15,34],[18,32],[22,32],[25,32],[28,30],[30,32],[32,30],[34,28],[36,25],[38,22],[40,18],[42,15],[44,12],[46,8],[48,5],[50,2],[48,0],[45,-4],[42,-8],[40,-12],[38,-18],[36,-22],[34,-26],[32,-28],[30,-30],[28,-32],[26,-34],[24,-33],[22,-30],[20,-28],[18,-25],[16,-22],[14,-18],[13,-14],[12,-10],[10,-5],[8,0],[5,4],[2,6],[0,8],[-3,10],[-6,12],[-8,14],[-10,14],[-12,12],[-15,12]],
   // Asia
-  [[-28,42],[32,42],[36,40],[40,38],[45,38],[50,38],[55,35],[58,34],[60,35],[62,38],[65,40],[68,42],[70,40],[72,38],[75,35],[78,32],[80,30],[82,28],[85,25],[88,22],[90,22],[92,20],[95,16],[98,14],[100,14],[102,16],[104,18],[106,20],[108,22],[110,20],[112,18],[114,16],[116,14],[118,16],[120,18],[122,22],[124,28],[126,32],[128,35],[130,38],[132,40],[134,42],[136,44],[138,42],[140,44],[142,46],[145,50],[148,54],[152,58],[156,60],[160,62],[165,65],[170,68],[175,70],[180,70],[180,65],[175,60],[170,55],[165,52],[160,50],[155,48],[150,45],[145,42],[142,40],[140,38],[138,36],[136,34],[134,32],[132,28],[130,24],[128,20],[126,16],[124,14],[122,12],[120,10],[118,6],[116,4],[114,2],[112,0],[110,-4],[108,-6],[106,-8],[108,-8],[110,-6],[112,-4],[110,-6],[108,-8],[105,-8],[102,-4],[100,0],[96,6],[92,12],[88,18],[84,22],[80,28],[76,32],[72,36],[68,40],[65,38],[62,35],[58,30],[55,32],[52,35],[48,38],[44,40],[40,42],[36,42],[32,42],[28,42]],
-  // Australia
-  [[-115,-15],[118,-18],[120,-20],[123,-22],[126,-25],[128,-28],[130,-30],[132,-32],[135,-34],[138,-35],[140,-38],[142,-38],[145,-38],[148,-36],[150,-34],[152,-30],[154,-28],[153,-25],[150,-22],[148,-18],[146,-16],[144,-14],[142,-12],[140,-12],[138,-14],[136,-14],[134,-14],[132,-13],[130,-14],[128,-16],[126,-15],[124,-16],[122,-18],[120,-20],[118,-22],[116,-24],[115,-28],[116,-32],[118,-34],[120,-36],[122,-35],[125,-34],[128,-32],[130,-30],[115,-15]],
+  [[28,42],[32,42],[36,40],[40,38],[45,38],[50,38],[55,35],[58,34],[60,35],[62,38],[65,40],[68,42],[70,40],[72,38],[75,35],[78,32],[80,30],[82,28],[85,25],[88,22],[90,22],[92,20],[95,16],[98,14],[100,14],[102,16],[104,18],[106,20],[108,22],[110,20],[112,18],[114,16],[116,14],[118,16],[120,18],[122,22],[124,28],[126,32],[128,35],[130,38],[132,40],[134,42],[136,44],[138,42],[140,44],[142,46],[145,50],[148,54],[152,58],[156,60],[160,62],[165,65],[170,68],[175,70],[180,70],[180,65],[175,60],[170,55],[165,52],[160,50],[155,48],[150,45],[145,42],[142,40],[140,38],[138,36],[136,34],[134,32],[132,28],[130,24],[128,20],[126,16],[124,14],[122,12],[120,10],[118,6],[116,4],[114,2],[112,0],[110,-4],[108,-6],[106,-8],[108,-8],[110,-6],[112,-4],[110,-6],[108,-8],[105,-8],[102,-4],[100,0],[96,6],[92,12],[88,18],[84,22],[80,28],[76,32],[72,36],[68,40],[65,38],[62,35],[58,30],[55,32],[52,35],[48,38],[44,40],[40,42],[36,42],[32,42],[28,42]],
+  // Australia (fixed: was -115, should be 115)
+  [[115,-15],[118,-18],[120,-20],[123,-22],[126,-25],[128,-28],[130,-30],[132,-32],[135,-34],[138,-35],[140,-38],[142,-38],[145,-38],[148,-36],[150,-34],[152,-30],[154,-28],[153,-25],[150,-22],[148,-18],[146,-16],[144,-14],[142,-12],[140,-12],[138,-14],[136,-14],[134,-14],[132,-13],[130,-14],[128,-16],[126,-15],[124,-16],[122,-18],[120,-20],[118,-22],[116,-24],[115,-28],[116,-32],[118,-34],[120,-36],[122,-35],[125,-34],[128,-32],[130,-30],[115,-15]],
   // Greenland
   [[-55,60],[-50,62],[-48,64],[-45,66],[-42,68],[-38,70],[-35,72],[-30,74],[-25,76],[-20,78],[-18,80],[-22,82],[-28,83],[-35,83],[-42,82],[-48,80],[-52,78],[-54,75],[-56,72],[-58,68],[-58,65],[-55,60]],
   // Japan
@@ -55,73 +55,73 @@ const continents: number[][][] = [
   [[44,-12],[46,-15],[48,-18],[49,-21],[49,-24],[48,-26],[46,-25],[44,-22],[43,-19],[43,-16],[44,-12]],
   // New Zealand
   [[166,-34],[168,-36],[170,-38],[172,-40],[174,-42],[176,-44],[176,-46],[174,-46],[172,-44],[170,-42],[168,-40],[167,-38],[166,-36],[166,-34]],
-  // Indonesia/Malaysia
+  // Indonesia
   [[96,6],[98,4],[100,2],[102,0],[104,-2],[106,-4],[106,-6],[108,-7],[110,-7],[112,-7],[114,-8],[116,-8],[118,-8],[120,-8],[118,-6],[116,-4],[114,-2],[112,0],[110,2],[108,2],[106,2],[104,2],[102,2],[100,4],[98,6],[96,6]],
   // Philippines
   [[118,8],[120,10],[122,12],[124,14],[126,16],[126,18],[124,18],[122,16],[120,14],[118,12],[118,8]],
-  // Sri Lanka
-  [[80,6],[81,7],[82,8],[82,10],[80,10],[80,8],[80,6]],
 ];
 
-function createEarthTexture(): THREE.CanvasTexture {
+function createEarthCanvas(): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = 2048;
   canvas.height = 1024;
   const ctx = canvas.getContext('2d')!;
 
-  // Ocean - dark background
-  ctx.fillStyle = '#0d0d0d';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Ocean - solid dark
+  ctx.fillStyle = '#111111';
+  ctx.fillRect(0, 0, 2048, 1024);
 
   // Subtle grid lines
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
   ctx.lineWidth = 0.5;
   for (let lat = -80; lat <= 80; lat += 20) {
-    const y = ((90 - lat) / 180) * canvas.height;
+    const y = ((90 - lat) / 180) * 1024;
     ctx.beginPath();
     ctx.moveTo(0, y);
-    ctx.lineTo(canvas.width, y);
+    ctx.lineTo(2048, y);
     ctx.stroke();
   }
   for (let lng = -180; lng <= 180; lng += 30) {
-    const x = ((lng + 180) / 360) * canvas.width;
+    const x = ((lng + 180) / 360) * 2048;
     ctx.beginPath();
     ctx.moveTo(x, 0);
-    ctx.lineTo(x, canvas.height);
+    ctx.lineTo(x, 1024);
     ctx.stroke();
   }
 
-  // Draw each continent as a filled white polygon
+  // Draw continents — pure white filled polygons
   for (const continent of continents) {
     ctx.beginPath();
     for (let i = 0; i < continent.length; i++) {
       const [lng, lat] = continent[i];
-      const x = ((lng + 180) / 360) * canvas.width;
-      const y = ((90 - lat) / 180) * canvas.height;
+      const x = ((lng + 180) / 360) * 2048;
+      const y = ((90 - lat) / 180) * 1024;
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }
     ctx.closePath();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.fillStyle = '#ffffff';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
     ctx.stroke();
   }
 
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
+  return canvas;
 }
 
 function EarthGlobe() {
   const globeRef = useRef<THREE.Group>(null);
-  const [texture, setTexture] = useState<THREE.CanvasTexture | null>(null);
+  const materialRef = useRef<THREE.MeshBasicMaterial>(null);
 
   useEffect(() => {
-    const tex = createEarthTexture();
-    setTexture(tex);
-    return () => { tex.dispose(); };
+    if (!materialRef.current) return;
+    const canvas = createEarthCanvas();
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    materialRef.current.map = texture;
+    materialRef.current.needsUpdate = true;
   }, []);
 
   useFrame(({ clock }) => {
@@ -130,26 +130,25 @@ function EarthGlobe() {
     }
   });
 
-  if (!texture) return null;
-
   return (
     <group ref={globeRef}>
-      {/* Main globe with white continent texture */}
-      <Sphere args={[2, 64, 64]}>
-        <meshBasicMaterial map={texture} />
-      </Sphere>
+      {/* Main globe */}
+      <mesh>
+        <sphereGeometry args={[2, 64, 64]} />
+        <meshBasicMaterial ref={materialRef} color="#ffffff" />
+      </mesh>
 
-      {/* Atmosphere glow - inner */}
-      <Sphere args={[2.06, 64, 64]}>
+      {/* Atmosphere glow */}
+      <mesh>
+        <sphereGeometry args={[2.06, 64, 64]} />
         <meshBasicMaterial color="#ffffff" transparent opacity={0.03} side={THREE.BackSide} />
-      </Sphere>
-
-      {/* Atmosphere glow - outer */}
-      <Sphere args={[2.18, 64, 64]}>
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[2.18, 64, 64]} />
         <meshBasicMaterial color="#ffffff" transparent opacity={0.015} side={THREE.BackSide} />
-      </Sphere>
+      </mesh>
 
-      {/* Client location markers */}
+      {/* Client markers */}
       {clientLocations.map((loc, i) => {
         const pos = latLngToVector3(loc.lat, loc.lng, 2.02);
         return (
@@ -185,17 +184,14 @@ function GlowingMarker() {
 
   return (
     <>
-      {/* Core dot */}
       <mesh ref={meshRef}>
         <sphereGeometry args={[0.04, 16, 16]} />
         <meshBasicMaterial color="#22c55e" />
       </mesh>
-      {/* Pulse ring */}
       <mesh ref={ringRef}>
         <sphereGeometry args={[0.08, 16, 16]} />
         <meshBasicMaterial color="#22c55e" transparent opacity={0.3} />
       </mesh>
-      {/* Outer glow */}
       <mesh>
         <sphereGeometry args={[0.14, 16, 16]} />
         <meshBasicMaterial color="#22c55e" transparent opacity={0.08} />
