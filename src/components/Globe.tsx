@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useMemo, useEffect } from 'react';
+import { useRef, useMemo, useEffect, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Line } from '@react-three/drei';
 import * as THREE from 'three';
@@ -9,13 +9,7 @@ import landData from 'world-atlas/land-50m.json';
 
 // --- Data ---
 
-interface ClientLocation {
-  name: string;
-  lat: number;
-  lng: number;
-}
-
-const clientLocations: ClientLocation[] = [
+const clientLocations = [
   { name: 'Berlin', lat: 52.52, lng: 13.405 },
   { name: 'Texas', lat: 31.0, lng: -100.0 },
   { name: 'Minnesota', lat: 46.73, lng: -94.69 },
@@ -27,7 +21,7 @@ const land = feature(landData as any, (landData as any).objects.land);
 
 // --- Helpers ---
 
-function latLngToVec3(lat: number, lng: number, r: number): [number, number, number] {
+function toVec3(lat: number, lng: number, r: number): [number, number, number] {
   const phi = (90 - lat) * (Math.PI / 180);
   const theta = (lng + 180) * (Math.PI / 180);
   return [
@@ -37,13 +31,13 @@ function latLngToVec3(lat: number, lng: number, r: number): [number, number, num
   ];
 }
 
-function getLandPolygons(): number[][][][] {
+function getPolygons(): number[][][][] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const geom = land.geometry as any;
-  return geom.type === 'MultiPolygon' ? geom.coordinates : [geom.coordinates];
+  const g = land.geometry as any;
+  return g.type === 'MultiPolygon' ? g.coordinates : [g.coordinates];
 }
 
-// --- Texture generation ---
+// --- Canvas texture ---
 
 function buildTexture(): THREE.CanvasTexture {
   const W = 4096;
@@ -53,88 +47,46 @@ function buildTexture(): THREE.CanvasTexture {
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
 
-  // Ocean
-  ctx.fillStyle = '#0c0c0c';
+  const toXY = (c: number[]): [number, number] => [
+    ((c[0] + 180) / 360) * W,
+    ((90 - c[1]) / 180) * H,
+  ];
+
+  // Deep dark ocean
+  ctx.fillStyle = '#080808';
   ctx.fillRect(0, 0, W, H);
 
-  // Grid lines baked into texture
-  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
-  ctx.lineWidth = 1;
-  for (let lat = -60; lat <= 60; lat += 30) {
-    const y = ((90 - lat) / 180) * H;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(W, y);
-    ctx.stroke();
-  }
-  for (let lng = -150; lng <= 180; lng += 30) {
-    const x = ((lng + 180) / 360) * W;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, H);
-    ctx.stroke();
-  }
+  const polygons = getPolygons();
 
-  // Draw landmasses
-  const polygons = getLandPolygons();
-
-  const toXY = (coord: number[]): [number, number] => {
-    const x = ((coord[0] + 180) / 360) * W;
-    const y = ((90 - coord[1]) / 180) * H;
-    return [x, y];
-  };
-
-  // Filled continents — grey
+  // Filled landmasses — dark grey, subtle
   for (const polygon of polygons) {
-    // First ring is exterior, rest are holes
     const [exterior, ...holes] = polygon;
-
     ctx.beginPath();
     exterior.forEach((c: number[], i: number) => {
       const [x, y] = toXY(c);
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     });
     ctx.closePath();
-
-    // Cut out holes (lakes, etc.)
     for (const hole of holes) {
       hole.forEach((c: number[], i: number) => {
         const [x, y] = toXY(c);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       });
       ctx.closePath();
     }
-
-    ctx.fillStyle = '#7a7a7a';
+    ctx.fillStyle = '#1a1a1a';
     ctx.fill('evenodd');
   }
 
-  // Add noise texture for natural terrain feel
-  const imageData = ctx.getImageData(0, 0, W, H);
-  const px = imageData.data;
-  for (let i = 0; i < px.length; i += 4) {
-    if (px[i] > 30) {
-      // Land pixel — add grain
-      const n = (Math.random() - 0.5) * 30;
-      px[i] = Math.max(50, Math.min(160, px[i] + n));
-      px[i + 1] = Math.max(50, Math.min(160, px[i + 1] + n));
-      px[i + 2] = Math.max(50, Math.min(158, px[i + 2] + n));
-    }
-  }
-  ctx.putImageData(imageData, 0, 0);
-
-  // Coastline stroke
-  ctx.strokeStyle = 'rgba(180,180,180,0.35)';
-  ctx.lineWidth = 1.5;
+  // Coastline outlines — the primary visual element
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+  ctx.lineWidth = 1.2;
   for (const polygon of polygons) {
     for (const ring of polygon) {
       ctx.beginPath();
       ring.forEach((c: number[], i: number) => {
         const [x, y] = toXY(c);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       });
       ctx.closePath();
       ctx.stroke();
@@ -142,146 +94,182 @@ function buildTexture(): THREE.CanvasTexture {
   }
 
   const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 16;
   return tex;
 }
 
-// --- Grid lines as 3D curves on sphere ---
+// --- 3D Grid lines ---
 
 function useGridLines() {
   return useMemo(() => {
-    const R = 2.003;
+    const R = 2.002;
     const lines: [number, number, number][][] = [];
-
-    // Latitude circles
     for (let lat = -60; lat <= 60; lat += 30) {
       const pts: [number, number, number][] = [];
-      for (let lng = -180; lng <= 180; lng += 2) {
-        pts.push(latLngToVec3(lat, lng, R));
-      }
+      for (let lng = -180; lng <= 180; lng += 2) pts.push(toVec3(lat, lng, R));
       lines.push(pts);
     }
-
-    // Longitude semicircles
     for (let lng = -150; lng <= 180; lng += 30) {
       const pts: [number, number, number][] = [];
-      for (let lat = -90; lat <= 90; lat += 2) {
-        pts.push(latLngToVec3(lat, lng, R));
-      }
+      for (let lat = -90; lat <= 90; lat += 2) pts.push(toVec3(lat, lng, R));
       lines.push(pts);
     }
-
     return lines;
   }, []);
 }
 
-// --- Scene components ---
+// --- Scene ---
 
 function EarthGlobe() {
   const groupRef = useRef<THREE.Group>(null);
-  const matRef = useRef<THREE.MeshBasicMaterial>(null);
+  const [texture, setTexture] = useState<THREE.CanvasTexture | null>(null);
   const gridLines = useGridLines();
 
   useEffect(() => {
-    if (!matRef.current) return;
     const tex = buildTexture();
-    matRef.current.map = tex;
-    matRef.current.needsUpdate = true;
+    setTexture(tex);
     return () => { tex.dispose(); };
   }, []);
 
   useFrame(({ clock }) => {
     if (groupRef.current) {
-      groupRef.current.rotation.y = clock.getElapsedTime() * 0.05;
+      groupRef.current.rotation.y = clock.getElapsedTime() * 0.04;
     }
   });
 
   return (
     <group ref={groupRef}>
-      {/* Globe sphere with continent texture */}
+      {/* Globe */}
       <mesh>
-        <sphereGeometry args={[2, 96, 64]} />
-        <meshBasicMaterial ref={matRef} color="#ffffff" />
+        <sphereGeometry args={[2, 128, 64]} />
+        {texture ? (
+          <meshBasicMaterial map={texture} toneMapped={false} />
+        ) : (
+          <meshBasicMaterial color="#080808" />
+        )}
       </mesh>
 
-      {/* 3D grid lines on sphere surface */}
+      {/* Grid lines */}
       {gridLines.map((pts, i) => (
-        <Line key={`g${i}`} points={pts} color="#ffffff" transparent opacity={0.08} lineWidth={0.5} />
+        <Line
+          key={`g${i}`}
+          points={pts}
+          color="#ffffff"
+          transparent
+          opacity={0.04}
+          lineWidth={0.5}
+        />
       ))}
 
-      {/* Atmosphere glow */}
+      {/* Atmosphere */}
       <mesh>
-        <sphereGeometry args={[2.05, 64, 48]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.025} side={THREE.BackSide} />
+        <sphereGeometry args={[2.04, 64, 48]} />
+        <meshBasicMaterial
+          color="#334155"
+          transparent
+          opacity={0.08}
+          side={THREE.BackSide}
+        />
       </mesh>
       <mesh>
-        <sphereGeometry args={[2.15, 64, 48]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.012} side={THREE.BackSide} />
+        <sphereGeometry args={[2.12, 64, 48]} />
+        <meshBasicMaterial
+          color="#1e293b"
+          transparent
+          opacity={0.04}
+          side={THREE.BackSide}
+        />
       </mesh>
 
-      {/* Client markers */}
+      {/* Markers */}
       {clientLocations.map((loc, i) => (
-        <GlowingMarker key={i} lat={loc.lat} lng={loc.lng} />
+        <Marker key={i} lat={loc.lat} lng={loc.lng} />
       ))}
 
-      {/* Connection arcs from Berlin to each US location */}
+      {/* Arcs from Berlin to US locations */}
       {clientLocations.slice(1).map((loc, i) => (
-        <ConnectionArc key={`a${i}`} from={clientLocations[0]} to={loc} />
+        <Arc key={`a${i}`} from={clientLocations[0]} to={loc} />
       ))}
     </group>
   );
 }
 
-function GlowingMarker({ lat, lng }: { lat: number; lng: number }) {
-  const pos = useMemo(() => latLngToVec3(lat, lng, 2.02), [lat, lng]);
+function Marker({ lat, lng }: { lat: number; lng: number }) {
+  const pos = useMemo(() => toVec3(lat, lng, 2.01), [lat, lng]);
   const coreRef = useRef<THREE.Mesh>(null);
-  const ringRef = useRef<THREE.Mesh>(null);
+  const pulseRef = useRef<THREE.Mesh>(null);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
-    if (coreRef.current) coreRef.current.scale.setScalar(1 + Math.sin(t * 3) * 0.25);
-    if (ringRef.current) {
-      ringRef.current.scale.setScalar(1 + Math.sin(t * 2) * 0.5);
-      (ringRef.current.material as THREE.MeshBasicMaterial).opacity = 0.3 - Math.sin(t * 2) * 0.15;
+    if (coreRef.current) {
+      coreRef.current.scale.setScalar(1 + Math.sin(t * 2.5) * 0.15);
+    }
+    if (pulseRef.current) {
+      const s = 1 + ((t * 0.8) % 1) * 2;
+      pulseRef.current.scale.setScalar(s);
+      (pulseRef.current.material as THREE.MeshBasicMaterial).opacity =
+        0.4 * (1 - ((t * 0.8) % 1));
     }
   });
 
   return (
     <group position={pos}>
+      {/* Bright core */}
       <mesh ref={coreRef}>
-        <sphereGeometry args={[0.04, 16, 16]} />
-        <meshBasicMaterial color="#22c55e" />
+        <sphereGeometry args={[0.028, 16, 16]} />
+        <meshBasicMaterial color="#4ade80" toneMapped={false} />
       </mesh>
-      <mesh ref={ringRef}>
-        <sphereGeometry args={[0.08, 16, 16]} />
-        <meshBasicMaterial color="#22c55e" transparent opacity={0.3} />
+      {/* Expanding pulse ring */}
+      <mesh ref={pulseRef}>
+        <ringGeometry args={[0.03, 0.04, 32]} />
+        <meshBasicMaterial
+          color="#22c55e"
+          transparent
+          opacity={0.4}
+          side={THREE.DoubleSide}
+          toneMapped={false}
+        />
       </mesh>
+      {/* Soft glow */}
       <mesh>
-        <sphereGeometry args={[0.13, 16, 16]} />
-        <meshBasicMaterial color="#22c55e" transparent opacity={0.06} />
+        <sphereGeometry args={[0.07, 16, 16]} />
+        <meshBasicMaterial color="#22c55e" transparent opacity={0.1} toneMapped={false} />
       </mesh>
     </group>
   );
 }
 
-function ConnectionArc({ from, to }: { from: ClientLocation; to: ClientLocation }) {
+function Arc({
+  from,
+  to,
+}: {
+  from: { lat: number; lng: number };
+  to: { lat: number; lng: number };
+}) {
   const points = useMemo(() => {
     const R = 2;
-    const [sx, sy, sz] = latLngToVec3(from.lat, from.lng, R);
-    const [ex, ey, ez] = latLngToVec3(to.lat, to.lng, R);
-    const start = new THREE.Vector3(sx, sy, sz);
-    const end = new THREE.Vector3(ex, ey, ez);
-    const dist = start.distanceTo(end);
+    const s = new THREE.Vector3(...toVec3(from.lat, from.lng, R));
+    const e = new THREE.Vector3(...toVec3(to.lat, to.lng, R));
+    const dist = s.distanceTo(e);
     const mid = new THREE.Vector3()
-      .addVectors(start, end)
+      .addVectors(s, e)
       .multiplyScalar(0.5)
       .normalize()
-      .multiplyScalar(R + dist * 0.3);
-    const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
-    return curve.getPoints(80).map((p): [number, number, number] => [p.x, p.y, p.z]);
+      .multiplyScalar(R + dist * 0.25);
+    return new THREE.QuadraticBezierCurve3(s, mid, e)
+      .getPoints(100)
+      .map((p): [number, number, number] => [p.x, p.y, p.z]);
   }, [from, to]);
 
-  return <Line points={points} color="#22c55e" transparent opacity={0.3} lineWidth={1.5} />;
+  return (
+    <Line
+      points={points}
+      color="#22c55e"
+      transparent
+      opacity={0.2}
+      lineWidth={1.2}
+    />
+  );
 }
 
 // --- Export ---
@@ -290,8 +278,8 @@ export function Globe() {
   return (
     <div className="w-full h-full">
       <Canvas
-        camera={{ position: [0, 0, 5.2], fov: 45 }}
-        gl={{ antialias: true, alpha: true }}
+        camera={{ position: [0, 0.4, 5], fov: 42 }}
+        gl={{ antialias: true, alpha: true, toneMapping: THREE.NoToneMapping }}
         style={{ background: 'transparent' }}
       >
         <EarthGlobe />
@@ -299,7 +287,7 @@ export function Globe() {
           enableZoom={false}
           enablePan={false}
           autoRotate={false}
-          rotateSpeed={0.3}
+          rotateSpeed={0.25}
           minPolarAngle={Math.PI * 0.3}
           maxPolarAngle={Math.PI * 0.7}
         />
