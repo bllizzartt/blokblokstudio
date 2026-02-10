@@ -53,7 +53,7 @@ function EarthGlobe() {
   return (
     <group ref={groupRef}>
       <mesh>
-        <sphereGeometry args={[2, 64, 64]} />
+        <sphereGeometry args={[2, 128, 128]} />
         <meshBasicMaterial color="#0a0a0a" />
       </mesh>
 
@@ -69,8 +69,8 @@ function EarthGlobe() {
       ))}
 
       <mesh>
-        <sphereGeometry args={[2.06, 64, 48]} />
-        <meshBasicMaterial color="#22c55e" transparent opacity={0.025} side={THREE.BackSide} />
+        <sphereGeometry args={[2.04, 128, 128]} />
+        <meshBasicMaterial color="#22c55e" transparent opacity={0.015} side={THREE.BackSide} />
       </mesh>
 
       {clientLocations.map((loc, i) => (
