@@ -115,7 +115,7 @@ export function HomeHero() {
               transition={{ delay: 2 }}
               className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-wrap items-center justify-center gap-3"
             >
-              {['Berlin', 'Texas', 'Minnesota', 'New Mexico'].map((loc) => (
+              {['USA', 'Germany'].map((loc) => (
                 <div
                   key={loc}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/5"
