@@ -5,6 +5,8 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Line } from '@react-three/drei';
 import * as THREE from 'three';
 
+const R = 1.2; // Globe radius — small enough to never clip
+
 const clientLocations = [
   { name: 'Berlin', lat: 52.52, lng: 13.405 },
   { name: 'Texas', lat: 31.0, lng: -100.0 },
@@ -24,16 +26,16 @@ function toVec3(lat: number, lng: number, r: number): [number, number, number] {
 
 function useGridLines() {
   return useMemo(() => {
-    const R = 2.005;
+    const gr = R + 0.003;
     const lines: [number, number, number][][] = [];
     for (let lat = -60; lat <= 60; lat += 20) {
       const pts: [number, number, number][] = [];
-      for (let lng = -180; lng <= 180; lng += 2) pts.push(toVec3(lat, lng, R));
+      for (let lng = -180; lng <= 180; lng += 2) pts.push(toVec3(lat, lng, gr));
       lines.push(pts);
     }
     for (let lng = -180; lng < 180; lng += 20) {
       const pts: [number, number, number][] = [];
-      for (let lat = -90; lat <= 90; lat += 2) pts.push(toVec3(lat, lng, R));
+      for (let lat = -90; lat <= 90; lat += 2) pts.push(toVec3(lat, lng, gr));
       lines.push(pts);
     }
     return lines;
@@ -53,7 +55,7 @@ function EarthGlobe() {
   return (
     <group ref={groupRef}>
       <mesh>
-        <sphereGeometry args={[2, 128, 128]} />
+        <sphereGeometry args={[R, 128, 128]} />
         <meshBasicMaterial color="#0a0a0a" />
       </mesh>
 
@@ -69,7 +71,7 @@ function EarthGlobe() {
       ))}
 
       <mesh>
-        <sphereGeometry args={[2.04, 128, 128]} />
+        <sphereGeometry args={[R + 0.02, 128, 128]} />
         <meshBasicMaterial color="#22c55e" transparent opacity={0.015} side={THREE.BackSide} />
       </mesh>
 
@@ -85,7 +87,7 @@ function EarthGlobe() {
 }
 
 function Marker({ lat, lng }: { lat: number; lng: number }) {
-  const pos = useMemo(() => toVec3(lat, lng, 2.01), [lat, lng]);
+  const pos = useMemo(() => toVec3(lat, lng, R + 0.005), [lat, lng]);
   const coreRef = useRef<THREE.Mesh>(null);
   const pulseRef = useRef<THREE.Mesh>(null);
 
@@ -105,15 +107,15 @@ function Marker({ lat, lng }: { lat: number; lng: number }) {
   return (
     <group position={pos}>
       <mesh ref={coreRef}>
-        <sphereGeometry args={[0.035, 16, 16]} />
+        <sphereGeometry args={[0.02, 16, 16]} />
         <meshBasicMaterial color="#4ade80" toneMapped={false} />
       </mesh>
       <mesh ref={pulseRef}>
-        <ringGeometry args={[0.04, 0.05, 32]} />
+        <ringGeometry args={[0.025, 0.032, 32]} />
         <meshBasicMaterial color="#22c55e" transparent opacity={0.4} side={THREE.DoubleSide} toneMapped={false} />
       </mesh>
       <mesh>
-        <sphereGeometry args={[0.08, 16, 16]} />
+        <sphereGeometry args={[0.05, 16, 16]} />
         <meshBasicMaterial color="#22c55e" transparent opacity={0.08} toneMapped={false} />
       </mesh>
     </group>
@@ -122,7 +124,6 @@ function Marker({ lat, lng }: { lat: number; lng: number }) {
 
 function Arc({ from, to }: { from: { lat: number; lng: number }; to: { lat: number; lng: number } }) {
   const points = useMemo(() => {
-    const R = 2;
     const s = new THREE.Vector3(...toVec3(from.lat, from.lng, R));
     const e = new THREE.Vector3(...toVec3(to.lat, to.lng, R));
     const dist = s.distanceTo(e);
@@ -143,7 +144,7 @@ export function Globe() {
   return (
     <div className="w-full h-full">
       <Canvas
-        camera={{ position: [0, 0.2, 9], fov: 28 }}
+        camera={{ position: [0, 0, 3.8], fov: 40 }}
         gl={{ antialias: true, alpha: true, toneMapping: THREE.NoToneMapping }}
         style={{ background: 'transparent' }}
       >
