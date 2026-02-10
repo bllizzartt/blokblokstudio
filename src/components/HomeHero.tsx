@@ -3,7 +3,17 @@
 import { useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { MagneticButton } from './MagneticButton';
+
+const Globe = dynamic(() => import('./Globe').then((m) => ({ default: m.Globe })), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full flex items-center justify-center">
+      <div className="w-16 h-16 rounded-full border border-white/10 animate-pulse" />
+    </div>
+  ),
+});
 
 export function HomeHero() {
   const t = useTranslations('home');
@@ -11,7 +21,8 @@ export function HomeHero() {
   return (
     <section className="relative min-h-screen flex items-center">
       <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8 w-full">
-        <div className="max-w-2xl">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          {/* Left: Text content */}
           <div>
             <motion.div
               initial={{ opacity: 0, y: 30 }}
@@ -82,6 +93,41 @@ export function HomeHero() {
               </MagneticButton>
             </motion.div>
           </div>
+
+          {/* Right: Globe */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 1.2, delay: 0.5, ease: 'easeOut' }}
+            className="relative h-[500px] lg:h-[600px] overflow-visible"
+          >
+            {/* Glow behind globe */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-72 h-72 rounded-full bg-green-500/[0.04] blur-[80px]" />
+            </div>
+
+            <Globe />
+
+            {/* Location labels */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 2 }}
+              className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-wrap items-center justify-center gap-3"
+            >
+              {['USA', 'Germany'].map((loc) => (
+                <div
+                  key={loc}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/5"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                  <span className="text-[10px] text-gray-500 tracking-wide">
+                    {loc}
+                  </span>
+                </div>
+              ))}
+            </motion.div>
+          </motion.div>
         </div>
       </div>
 
