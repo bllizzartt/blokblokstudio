@@ -143,7 +143,7 @@ export function Globe() {
   return (
     <div className="w-full h-full">
       <Canvas
-        camera={{ position: [0, 0.3, 6.5], fov: 38 }}
+        camera={{ position: [0, 0.2, 8], fov: 32 }}
         gl={{ antialias: true, alpha: true, toneMapping: THREE.NoToneMapping }}
         style={{ background: 'transparent' }}
       >
