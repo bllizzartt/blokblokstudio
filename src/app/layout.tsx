@@ -26,33 +26,19 @@
  */
 
 import type { Metadata } from 'next';
-import { NextIntlClientProvider } from 'next-intl'; // Wraps app with translation context
-import { getLocale, getMessages } from 'next-intl/server'; // Server-side locale detection
-import './globals.css'; // Global styles, Tailwind, custom utilities
-import { Navbar } from '@/components/Navbar';
-import { Footer } from '@/components/Footer';
-import { OrganizationSchema, WebsiteSchema } from './structured-data'; // JSON-LD for Google
+import { NextIntlClientProvider } from 'next-intl';
+import { getLocale, getMessages } from 'next-intl/server';
+import './globals.css';
+import { OrganizationSchema, WebsiteSchema } from './structured-data';
 
-/* ── SEO METADATA ──
-   This controls how the site appears in Google search results,
-   social media shares (OG tags), and Twitter cards.
-   Edit these values to match your actual brand info. */
 export const metadata: Metadata = {
-  /* Base URL for all relative URLs in metadata */
   metadataBase: new URL('https://blokblokstudio.com'),
-
-  /* Browser tab title — "default" is used on homepage,
-     "template" adds suffix on other pages (e.g., "About | Blok Blok Studio") */
   title: {
     default: 'Blok Blok Studio | Creative Digital Agency',
     template: '%s | Blok Blok Studio',
   },
-
-  /* Meta description — shown in Google search results */
   description:
     'Blok Blok Studio is a creative digital agency crafting bold brands, stunning websites, and digital products that move people. Web design, branding, app development, and digital marketing.',
-
-  /* SEO keywords — helps with search ranking */
   keywords: [
     'digital agency',
     'web design',
@@ -66,17 +52,11 @@ export const metadata: Metadata = {
   authors: [{ name: 'Blok Blok Studio' }],
   creator: 'Blok Blok Studio',
   publisher: 'Blok Blok Studio',
-
-  /* Prevents browsers from auto-linking emails/phones/addresses */
   formatDetection: {
     email: false,
     address: false,
     telephone: false,
   },
-
-  /* ── OPEN GRAPH (Facebook, LinkedIn, etc.) ──
-     Controls the preview card when the site URL is shared on social media.
-     IMAGE: Replace /public/og-image.jpg with a real 1200x630 image. */
   openGraph: {
     type: 'website',
     locale: 'en_US',
@@ -94,9 +74,6 @@ export const metadata: Metadata = {
       },
     ],
   },
-
-  /* ── TWITTER CARD ──
-     Controls the preview card when shared on Twitter/X. */
   twitter: {
     card: 'summary_large_image',
     title: 'Blok Blok Studio | Creative Digital Agency',
@@ -104,9 +81,6 @@ export const metadata: Metadata = {
       'A creative digital agency crafting bold brands, stunning websites, and digital products that move people.',
     images: ['/og-image.jpg'],
   },
-
-  /* ── SEARCH ENGINE ROBOTS ──
-     Controls crawling/indexing. Currently set to allow everything. */
   robots: {
     index: true,
     follow: true,
@@ -118,57 +92,37 @@ export const metadata: Metadata = {
       'max-snippet': -1,
     },
   },
-
-  /* ── GOOGLE SEARCH CONSOLE ──
-     Replace with your real verification code from Google Search Console.
-     TODO: Get this from https://search.google.com/search-console */
   verification: {
     google: 'YOUR_GOOGLE_VERIFICATION_CODE',
   },
 };
 
-/* ── ROOT LAYOUT COMPONENT ──
-   This wraps every page. It detects the user's language from their
-   browser settings, loads the matching translation file, and renders
-   the Navbar + page content + Footer. */
+/**
+ * Root layout — minimal shell shared by ALL routes.
+ * Navbar/Footer are added by (main)/layout.tsx for main site pages.
+ * The (funnel) route group gets NO Navbar/Footer.
+ */
 export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Detect user's language from browser Accept-Language header
   const locale = await getLocale();
-  // Load the matching translation JSON (e.g., /src/messages/en.json)
   const messages = await getMessages();
 
   return (
     <html lang={locale} className="dark">
-      {/* ── HEAD ──
-          Favicon, viewport, and manifest for PWA support.
-          - Favicon: /public/favicon.ico (the tab icon)
-          - Apple touch icon: /public/apple-touch-icon.png (iOS home screen)
-          - Manifest: /public/manifest.json (PWA config) */}
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/manifest.json" />
       </head>
-
-      {/* ── BODY ──
-          - bg-black: dark background
-          - text-white: default white text
-          - noise-overlay: adds subtle grain texture (see globals.css) */}
       <body className="bg-black text-white antialiased font-sans noise-overlay">
-        {/* JSON-LD structured data for Google rich results */}
         <OrganizationSchema />
         <WebsiteSchema />
-
-        {/* Translation provider — makes useTranslations() work in all components */}
         <NextIntlClientProvider messages={messages}>
-          <Navbar />
-          <main className="min-h-screen">{children}</main>
-          <Footer />
+          {children}
         </NextIntlClientProvider>
       </body>
     </html>
