@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
@@ -31,12 +32,13 @@ export function Footer() {
           {/* Brand */}
           <div className="col-span-2 sm:col-span-2 lg:col-span-1">
             <Link href="/" className="inline-block mb-4">
-              <span className="text-xl font-bold tracking-tight">
-                BLOK BLOK
-              </span>
-              <span className="block text-[10px] tracking-[0.3em] text-gray-400">
-                STUDIO
-              </span>
+              <Image
+                src="/logo.svg"
+                alt="Blok Blok Studio"
+                width={120}
+                height={40}
+                className="h-8 w-auto"
+              />
             </Link>
             <p className="text-gray-500 text-sm leading-relaxed max-w-xs">
               {t('tagline')}

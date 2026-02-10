@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -46,13 +47,15 @@ export function Navbar() {
         <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 sm:h-20">
             {/* Logo */}
-            <Link href="/" className="relative z-50 group">
-              <span className="text-xl font-bold tracking-tight">
-                BLOK BLOK
-              </span>
-              <span className="block text-[10px] tracking-[0.3em] text-gray-400 group-hover:text-white transition-colors">
-                STUDIO
-              </span>
+            <Link href="/" className="relative z-50">
+              <Image
+                src="/logo.svg"
+                alt="Blok Blok Studio"
+                width={120}
+                height={40}
+                className="h-8 sm:h-10 w-auto"
+                priority
+              />
             </Link>
 
             {/* Desktop Navigation */}
