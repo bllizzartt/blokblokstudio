@@ -10,13 +10,13 @@ export function HomeCTA() {
   const t = useTranslations('home');
 
   return (
-    <section className="py-32 px-6 lg:px-8">
+    <section className="py-16 sm:py-24 lg:py-32 px-5 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         <AnimatedSection>
-          <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-white/[0.05] to-white/[0.02] border border-white/5 p-12 md:p-20 text-center">
+          <div className="relative overflow-hidden rounded-2xl sm:rounded-[2.5rem] bg-gradient-to-br from-white/[0.05] to-white/[0.02] border border-white/5 p-8 sm:p-12 md:p-20 text-center">
             {/* Background decoration */}
             <motion.div
-              className="absolute top-0 right-0 w-80 h-80 rounded-full bg-white/[0.02] blur-3xl"
+              className="absolute top-0 right-0 w-40 sm:w-80 h-40 sm:h-80 rounded-full bg-white/[0.02] blur-3xl"
               animate={{
                 scale: [1, 1.2, 1],
                 opacity: [0.5, 0.8, 0.5],
@@ -33,16 +33,16 @@ export function HomeCTA() {
             />
 
             <div className="relative z-10">
-              <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
+              <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6 leading-tight">
                 {t('cta_heading')}
               </h2>
-              <p className="text-gray-400 text-lg max-w-xl mx-auto mb-10">
+              <p className="text-gray-400 text-base sm:text-lg max-w-xl mx-auto mb-8 sm:mb-10">
                 {t('cta_subheading')}
               </p>
               <MagneticButton as="div">
                 <Link
                   href="/contact"
-                  className="inline-flex items-center gap-3 px-10 py-5 rounded-full bg-white text-black font-medium text-lg hover:bg-gray-100 transition-colors"
+                  className="inline-flex items-center gap-2 sm:gap-3 px-8 sm:px-10 py-4 sm:py-5 rounded-full bg-white text-black font-medium text-base sm:text-lg hover:bg-gray-100 transition-colors"
                 >
                   {t('cta_button')}
                   <svg

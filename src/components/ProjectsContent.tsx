@@ -35,25 +35,25 @@ export function ProjectsContent() {
       : allProjects.filter((p) => p.category === activeFilter);
 
   return (
-    <section className="pt-32 pb-24 px-6 lg:px-8">
+    <section className="pt-24 sm:pt-32 pb-16 sm:pb-24 px-5 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <AnimatedSection className="text-center mb-16">
-          <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6">
+        <AnimatedSection className="text-center mb-10 sm:mb-16">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-4 sm:mb-6">
             {t('title')}
           </h1>
-          <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+          <p className="text-gray-400 text-base sm:text-lg max-w-2xl mx-auto">
             {t('subtitle')}
           </p>
         </AnimatedSection>
 
         {/* Filters */}
-        <AnimatedSection delay={0.2} className="flex flex-wrap items-center justify-center gap-3 mb-16">
+        <AnimatedSection delay={0.2} className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mb-10 sm:mb-16">
           {filters.map((filter) => (
             <button
               key={filter.key}
               onClick={() => setActiveFilter(filter.key)}
-              className={`px-5 py-2.5 rounded-full text-sm transition-all duration-300 ${
+              className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm transition-all duration-300 ${
                 activeFilter === filter.key
                   ? 'bg-white text-black'
                   : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
@@ -67,7 +67,7 @@ export function ProjectsContent() {
         {/* Grid */}
         <motion.div
           layout
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"
         >
           <AnimatePresence mode="popLayout">
             {filtered.map((project) => (
@@ -81,7 +81,7 @@ export function ProjectsContent() {
                 whileHover={{ y: -6 }}
                 className="group cursor-pointer"
               >
-                <div className="rounded-3xl overflow-hidden glass-card">
+                <div className="rounded-2xl sm:rounded-3xl overflow-hidden glass-card">
                   {/* Image placeholder */}
                   <div className="aspect-[4/3] bg-gradient-to-br from-gray-900 to-gray-800 relative overflow-hidden">
                     <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:30px_30px]" />
@@ -96,7 +96,7 @@ export function ProjectsContent() {
                   </div>
 
                   {/* Content */}
-                  <div className="p-6">
+                  <div className="p-4 sm:p-6">
                     <div className="flex items-center gap-3 mb-3">
                       <span className="text-xs text-gray-500 uppercase tracking-wider">
                         {project.category}

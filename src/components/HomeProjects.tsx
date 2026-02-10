@@ -36,14 +36,14 @@ export function HomeProjects() {
   const t = useTranslations('home');
 
   return (
-    <section className="py-32 px-6 lg:px-8">
+    <section className="py-16 sm:py-24 lg:py-32 px-5 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
-        <AnimatedSection className="flex flex-col md:flex-row items-start md:items-end justify-between mb-16 gap-6">
+        <AnimatedSection className="flex flex-col md:flex-row items-start md:items-end justify-between mb-10 sm:mb-16 gap-4 sm:gap-6">
           <div>
-            <h2 className="text-4xl md:text-5xl font-bold mb-4">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-3 sm:mb-4">
               {t('projects_heading')}
             </h2>
-            <p className="text-gray-400 text-lg max-w-xl">
+            <p className="text-gray-400 text-base sm:text-lg max-w-xl">
               {t('projects_subheading')}
             </p>
           </div>
@@ -68,13 +68,13 @@ export function HomeProjects() {
           </Link>
         </AnimatedSection>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           {featuredProjects.map((project, i) => (
             <AnimatedSection key={i} delay={i * 0.1}>
               <motion.div
                 whileHover={{ scale: 1.02 }}
                 transition={{ duration: 0.4 }}
-                className="group relative overflow-hidden rounded-3xl cursor-pointer"
+                className="group relative overflow-hidden rounded-2xl sm:rounded-3xl cursor-pointer"
               >
                 {/* Placeholder image area */}
                 <div
@@ -106,13 +106,13 @@ export function HomeProjects() {
                 </div>
 
                 {/* Info */}
-                <div className="absolute bottom-0 left-0 right-0 p-6 translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
+                <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
                   <div className="flex items-end justify-between">
                     <div>
                       <p className="text-xs text-gray-400 mb-1">
                         {project.category} &mdash; {project.year}
                       </p>
-                      <h3 className="text-xl font-semibold">
+                      <h3 className="text-lg sm:text-xl font-semibold">
                         {project.title}
                       </h3>
                     </div>

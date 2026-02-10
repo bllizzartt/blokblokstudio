@@ -17,20 +17,20 @@ export function TeamContent() {
   const t = useTranslations('team');
 
   return (
-    <section className="pt-32 pb-24 px-6 lg:px-8">
+    <section className="pt-24 sm:pt-32 pb-16 sm:pb-24 px-5 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <AnimatedSection className="text-center mb-24">
-          <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6">
+        <AnimatedSection className="text-center mb-14 sm:mb-20 lg:mb-24">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-4 sm:mb-6">
             {t('title')}
           </h1>
-          <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+          <p className="text-gray-400 text-base sm:text-lg max-w-2xl mx-auto">
             {t('subtitle')}
           </p>
         </AnimatedSection>
 
         {/* Team Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
           {teamMembers.map((member, i) => (
             <AnimatedSection key={i} delay={i * 0.1}>
               <motion.div
@@ -38,13 +38,13 @@ export function TeamContent() {
                 transition={{ duration: 0.3 }}
                 className="group"
               >
-                <div className="glass-card rounded-3xl overflow-hidden">
+                <div className="glass-card rounded-2xl sm:rounded-3xl overflow-hidden">
                   {/* Avatar placeholder */}
                   <div className="aspect-[3/4] bg-gradient-to-br from-gray-900 to-gray-800 relative overflow-hidden">
                     <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:30px_30px]" />
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-24 h-24 rounded-full border border-white/10 flex items-center justify-center group-hover:border-white/20 group-hover:scale-110 transition-all duration-500">
-                        <span className="text-2xl font-bold text-white/20 group-hover:text-white/40 transition-colors">
+                      <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-full border border-white/10 flex items-center justify-center group-hover:border-white/20 group-hover:scale-110 transition-all duration-500">
+                        <span className="text-xl sm:text-2xl font-bold text-white/20 group-hover:text-white/40 transition-colors">
                           {member.initials}
                         </span>
                       </div>
@@ -67,9 +67,9 @@ export function TeamContent() {
                   </div>
 
                   {/* Info */}
-                  <div className="p-6 text-center">
-                    <h3 className="text-lg font-semibold mb-1">{member.name}</h3>
-                    <p className="text-sm text-gray-500">{t(member.roleKey)}</p>
+                  <div className="p-3 sm:p-6 text-center">
+                    <h3 className="text-sm sm:text-lg font-semibold mb-0.5 sm:mb-1">{member.name}</h3>
+                    <p className="text-xs sm:text-sm text-gray-500">{t(member.roleKey)}</p>
                   </div>
                 </div>
               </motion.div>

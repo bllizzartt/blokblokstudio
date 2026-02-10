@@ -1,109 +1,75 @@
 'use client';
 
-import { useRef, useMemo, useEffect } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
-
-function Stars() {
-  const ref = useRef<THREE.Points>(null);
-  const geoRef = useRef<THREE.BufferGeometry>(null);
-
-  const positions = useMemo(() => {
-    const count = 2000;
-    const pos = new Float32Array(count * 3);
-
-    for (let i = 0; i < count; i++) {
-      const radius = 50 + Math.random() * 150;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-
-      pos[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
-      pos[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
-      pos[i * 3 + 2] = radius * Math.cos(phi);
-    }
-
-    return pos;
-  }, []);
-
-  useEffect(() => {
-    if (geoRef.current) {
-      geoRef.current.setAttribute(
-        'position',
-        new THREE.BufferAttribute(positions, 3)
-      );
-    }
-  }, [positions]);
-
-  useFrame(({ clock }) => {
-    if (ref.current) {
-      ref.current.rotation.y = clock.getElapsedTime() * 0.005;
-      ref.current.rotation.x = clock.getElapsedTime() * 0.002;
-    }
-  });
-
-  return (
-    <points ref={ref}>
-      <bufferGeometry ref={geoRef} />
-      <pointsMaterial
-        color="#ffffff"
-        size={0.8}
-        transparent
-        opacity={0.6}
-        sizeAttenuation
-        depthWrite={false}
-      />
-    </points>
-  );
-}
-
-function ShootingStar() {
-  const ref = useRef<THREE.Mesh>(null);
-  const speed = useMemo(() => 0.5 + Math.random() * 1.5, []);
-  const startDelay = useMemo(() => Math.random() * 30, []);
-  const startX = useMemo(() => (Math.random() - 0.5) * 100, []);
-  const startY = useMemo(() => 20 + Math.random() * 40, []);
-
-  useFrame(({ clock }) => {
-    if (!ref.current) return;
-    const t = clock.getElapsedTime() - startDelay;
-    if (t < 0) {
-      ref.current.visible = false;
-      return;
-    }
-    const cycle = t % 20;
-    if (cycle > 2) {
-      ref.current.visible = false;
-      return;
-    }
-    ref.current.visible = true;
-    ref.current.position.x = startX + cycle * speed * 30;
-    ref.current.position.y = startY - cycle * speed * 15;
-    ref.current.position.z = -50;
-    const fade = cycle < 0.3 ? cycle / 0.3 : cycle > 1.5 ? (2 - cycle) / 0.5 : 1;
-    (ref.current.material as THREE.MeshBasicMaterial).opacity = fade * 0.8;
-  });
-
-  return (
-    <mesh ref={ref}>
-      <sphereGeometry args={[0.3, 8, 8]} />
-      <meshBasicMaterial color="#ffffff" transparent opacity={0} />
-    </mesh>
-  );
-}
+import { useEffect, useRef } from 'react';
 
 export function StarField() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animationId: number;
+    const stars: { x: number; y: number; size: number; opacity: number; speed: number }[] = [];
+
+    function resize() {
+      if (!canvas) return;
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+
+    function initStars() {
+      stars.length = 0;
+      const count = Math.floor((window.innerWidth * window.innerHeight) / 3000);
+      for (let i = 0; i < count; i++) {
+        stars.push({
+          x: Math.random() * window.innerWidth,
+          y: Math.random() * window.innerHeight,
+          size: Math.random() * 1.5 + 0.5,
+          opacity: Math.random() * 0.6 + 0.1,
+          speed: Math.random() * 0.02 + 0.005,
+        });
+      }
+    }
+
+    function animate() {
+      if (!ctx || !canvas) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const time = Date.now() * 0.001;
+
+      for (const star of stars) {
+        const twinkle = Math.sin(time * star.speed * 100 + star.x) * 0.3 + 0.7;
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${star.opacity * twinkle})`;
+        ctx.fill();
+      }
+
+      animationId = requestAnimationFrame(animate);
+    }
+
+    resize();
+    initStars();
+    animate();
+
+    window.addEventListener('resize', () => {
+      resize();
+      initStars();
+    });
+
+    return () => {
+      cancelAnimationFrame(animationId);
+      window.removeEventListener('resize', resize);
+    };
+  }, []);
+
   return (
     <div className="fixed inset-0 -z-10">
-      <Canvas
-        camera={{ position: [0, 0, 50], fov: 60 }}
-        gl={{ antialias: false, alpha: true }}
-        style={{ background: 'transparent' }}
-      >
-        <Stars />
-        {Array.from({ length: 3 }).map((_, i) => (
-          <ShootingStar key={i} />
-        ))}
-      </Canvas>
+      <canvas ref={canvasRef} className="w-full h-full" />
     </div>
   );
 }

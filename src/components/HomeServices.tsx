@@ -24,24 +24,24 @@ export function HomeServices() {
   ];
 
   return (
-    <section className="py-32 px-6 lg:px-8">
+    <section className="py-16 sm:py-24 lg:py-32 px-5 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
-        <AnimatedSection className="text-center mb-20">
-          <h2 className="text-4xl md:text-5xl font-bold mb-6">
+        <AnimatedSection className="text-center mb-12 sm:mb-16 lg:mb-20">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 sm:mb-6">
             {t('services_heading')}
           </h2>
-          <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+          <p className="text-gray-400 text-base sm:text-lg max-w-2xl mx-auto">
             {t('services_subheading')}
           </p>
         </AnimatedSection>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
           {services.map((service, i) => (
             <AnimatedSection key={i} delay={i * 0.15}>
               <motion.div
                 whileHover={{ y: -8, scale: 1.02 }}
                 transition={{ duration: 0.3 }}
-                className="glass-card rounded-3xl p-8 h-full group cursor-pointer"
+                className="glass-card rounded-2xl sm:rounded-3xl p-6 sm:p-8 h-full group cursor-pointer"
               >
                 <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center mb-6 group-hover:bg-white/10 transition-colors">
                   <div className="text-gray-400 group-hover:text-white transition-colors">

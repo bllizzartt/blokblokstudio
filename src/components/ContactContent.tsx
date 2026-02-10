@@ -15,26 +15,26 @@ export function ContactContent() {
   };
 
   return (
-    <section className="pt-32 pb-24 px-6 lg:px-8">
+    <section className="pt-24 sm:pt-32 pb-16 sm:pb-24 px-5 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <AnimatedSection className="text-center mb-20">
-          <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6">
+        <AnimatedSection className="text-center mb-12 sm:mb-16 lg:mb-20">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-4 sm:mb-6">
             {t('title')}
           </h1>
-          <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+          <p className="text-gray-400 text-base sm:text-lg max-w-2xl mx-auto">
             {t('subtitle')}
           </p>
         </AnimatedSection>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 lg:gap-16">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 sm:gap-12 lg:gap-16">
           {/* Contact Form */}
           <AnimatedSection className="lg:col-span-3">
             {submitted ? (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="glass-card rounded-3xl p-12 text-center"
+                className="glass-card rounded-2xl sm:rounded-3xl p-8 sm:p-12 text-center"
               >
                 <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-6">
                   <svg
@@ -54,8 +54,8 @@ export function ContactContent() {
                 <h3 className="text-2xl font-semibold mb-2">{t('success')}</h3>
               </motion.div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div>
                     <label className="block text-sm text-gray-400 mb-2">
                       {t('name')}
@@ -63,7 +63,7 @@ export function ContactContent() {
                     <input
                       type="text"
                       required
-                      className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-colors"
+                      className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 text-sm sm:text-base text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-colors"
                       placeholder={t('name')}
                     />
                   </div>
@@ -74,7 +74,7 @@ export function ContactContent() {
                     <input
                       type="email"
                       required
-                      className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-colors"
+                      className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 text-sm sm:text-base text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-colors"
                       placeholder={t('email')}
                     />
                   </div>
@@ -98,7 +98,7 @@ export function ContactContent() {
                   <textarea
                     required
                     rows={6}
-                    className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-colors resize-none"
+                    className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 text-sm sm:text-base text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-colors resize-none"
                     placeholder={t('message')}
                   />
                 </div>
@@ -117,7 +117,7 @@ export function ContactContent() {
 
           {/* Contact Info Sidebar */}
           <AnimatedSection delay={0.2} className="lg:col-span-2">
-            <div className="glass-card rounded-3xl p-8 space-y-8">
+            <div className="glass-card rounded-2xl sm:rounded-3xl p-6 sm:p-8 space-y-6 sm:space-y-8">
               <h3 className="text-lg font-semibold">{t('info_title')}</h3>
 
               <div className="space-y-6">

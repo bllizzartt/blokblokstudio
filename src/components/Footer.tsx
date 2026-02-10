@@ -26,10 +26,10 @@ export function Footer() {
 
   return (
     <footer className="border-t border-white/5 bg-black">
-      <div className="max-w-7xl mx-auto px-6 lg:px-8 py-16 lg:py-24">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-8">
+      <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-24">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-8">
           {/* Brand */}
-          <div className="lg:col-span-1">
+          <div className="col-span-2 sm:col-span-2 lg:col-span-1">
             <Link href="/" className="inline-block mb-4">
               <span className="text-xl font-bold tracking-tight">
                 BLOK BLOK
@@ -84,22 +84,22 @@ export function Footer() {
           </div>
 
           {/* Newsletter */}
-          <div>
-            <h4 className="text-sm font-medium mb-6 text-gray-300">
+          <div className="col-span-2 sm:col-span-2 lg:col-span-1">
+            <h4 className="text-sm font-medium mb-4 sm:mb-6 text-gray-300">
               {t('newsletter_title')}
             </h4>
             <form
-              className="flex gap-2"
+              className="flex flex-col sm:flex-row gap-2"
               onSubmit={(e) => e.preventDefault()}
             >
               <input
                 type="email"
                 placeholder={t('newsletter_placeholder')}
-                className="flex-1 px-4 py-2.5 rounded-full bg-white/5 border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-colors"
+                className="flex-1 min-w-0 px-4 py-2.5 rounded-full bg-white/5 border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-colors"
               />
               <button
                 type="submit"
-                className="px-5 py-2.5 rounded-full bg-white text-black text-sm font-medium hover:bg-gray-200 transition-colors"
+                className="px-5 py-2.5 rounded-full bg-white text-black text-sm font-medium hover:bg-gray-200 transition-colors whitespace-nowrap"
               >
                 {t('newsletter_button')}
               </button>
@@ -108,7 +108,7 @@ export function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="mt-16 pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="mt-10 sm:mt-16 pt-6 sm:pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-gray-600">
             &copy; {new Date().getFullYear()} Blok Blok Studio.{' '}
             {t('copyright')}
