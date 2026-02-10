@@ -5,7 +5,6 @@
     "about": "Nosotros",
     "services": "Servicios",
     "team": "Equipo",
-    "blog": "Blog",
     "contact": "Contacto"
   },
   "home": {
@@ -110,10 +109,6 @@
     "info_email": "hello@blokblokstudio.com",
     "info_phone": "+1 (555) 000-0000",
     "info_address": "123 Creative Ave, Design District"
-  },
-  "blog": {
-    "title": "Insights & Ideas",
-    "subtitle": "Thoughts on design, technology, and building brands that matter."
   },
   "footer": {
     "tagline": "Creando experiencias digitales que inspiran.",

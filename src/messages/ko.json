@@ -5,7 +5,6 @@
     "about": "회사 소개",
     "services": "서비스",
     "team": "팀",
-    "blog": "Blog",
     "contact": "문의하기"
   },
   "home": {
@@ -110,10 +109,6 @@
     "info_email": "hello@blokblokstudio.com",
     "info_phone": "+1 (555) 000-0000",
     "info_address": "123 Creative Ave, Design District"
-  },
-  "blog": {
-    "title": "Insights & Ideas",
-    "subtitle": "Thoughts on design, technology, and building brands that matter."
   },
   "footer": {
     "tagline": "영감을 주는 디지털 경험을 만듭니다.",
