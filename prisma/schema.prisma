@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Lead {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  field     String
+  website   String?
+  noWebsite Boolean  @default(false)
+  problem   String
+  source    String   @default("funnel")
+
+  emailsSent   Int      @default(0)
+  lastEmailAt  DateTime?
+  unsubscribed Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EmailCampaign {
+  id        String   @id @default(cuid())
+  subject   String
+  body      String
+  sentTo    Int      @default(0)
+  sentAt    DateTime?
+  status    String   @default("draft")
+  createdAt DateTime @default(now())
+}
