@@ -22,7 +22,9 @@ interface Campaign {
   subject: string;
   body: string;
   sentTo: number;
+  totalLeads: number;
   sentAt: string | null;
+  scheduledAt: string | null;
   status: string;
   createdAt: string;
 }
@@ -225,7 +227,16 @@ export function AdminDashboard() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [showVideoModal, setShowVideoModal] = useState(false);
   const [videoUrl, setVideoUrl] = useState('');
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState('');
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  // CSV Import
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importData, setImportData] = useState<Record<string, string>[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [columnMap, setColumnMap] = useState<Record<string, string>>({});
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   // Sidebar collapsed on mobile
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -463,7 +474,11 @@ export function AdminDashboard() {
       return;
     }
 
-    if (!confirm(`Send "${subject}" to ${getRecipientLabel()}?`)) return;
+    const action = scheduleEnabled && scheduledAt ? 'schedule' : 'send';
+    const confirmMsg = action === 'schedule'
+      ? `Schedule "${subject}" for ${new Date(scheduledAt).toLocaleString()} to ${getRecipientLabel()}?`
+      : `Send "${subject}" to ${getRecipientLabel()}?`;
+    if (!confirm(confirmMsg)) return;
 
     setSending(true);
 
@@ -475,20 +490,32 @@ export function AdminDashboard() {
         leadIds = [individualLeadId];
       }
 
+      const payload: Record<string, unknown> = { subject, body, leadIds };
+      if (scheduleEnabled && scheduledAt) {
+        payload.scheduledAt = new Date(scheduledAt).toISOString();
+      }
+
       const res = await fetch('/api/admin/campaign', {
         method: 'POST',
         headers: headers(),
-        body: JSON.stringify({ subject, body, leadIds }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      showToast('success', `Campaign sent to ${data.sentTo}/${data.total} leads!`);
+      const msg = data.status === 'scheduled'
+        ? `Campaign scheduled for ${new Date(scheduledAt).toLocaleString()}`
+        : data.status === 'queued'
+        ? `Campaign queued — ${data.total} leads will be sent shortly`
+        : `Campaign sent to ${data.sentTo}/${data.total} leads!`;
+      showToast('success', msg);
       setSubject('');
       setBody('');
       setSendTarget('all');
       setIndividualLeadId(null);
+      setScheduleEnabled(false);
+      setScheduledAt('');
       fetchCampaigns();
       fetchLeads();
     } catch (err) {
@@ -544,6 +571,113 @@ export function AdminDashboard() {
     a.download = `blokblok-leads-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const parseCSV = (text: string): Record<string, string>[] => {
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) return [];
+
+    // Parse header
+    const headerLine = lines[0];
+    const headers: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < headerLine.length; i++) {
+      const ch = headerLine[i];
+      if (ch === '"') { inQuotes = !inQuotes; }
+      else if (ch === ',' && !inQuotes) { headers.push(current.trim()); current = ''; }
+      else { current += ch; }
+    }
+    headers.push(current.trim());
+
+    // Parse rows
+    const rows: Record<string, string>[] = [];
+    for (let r = 1; r < lines.length; r++) {
+      const line = lines[r];
+      const values: string[] = [];
+      let val = '';
+      let q = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') { q = !q; }
+        else if (ch === ',' && !q) { values.push(val.trim()); val = ''; }
+        else { val += ch; }
+      }
+      values.push(val.trim());
+
+      const row: Record<string, string> = {};
+      headers.forEach((h, i) => { row[h] = values[i] || ''; });
+      rows.push(row);
+    }
+    return rows;
+  };
+
+  const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const parsed = parseCSV(text);
+      if (parsed.length === 0) {
+        showToast('error', 'Could not parse CSV file');
+        return;
+      }
+      setImportData(parsed);
+      // Auto-map columns
+      const cols = Object.keys(parsed[0]);
+      const autoMap: Record<string, string> = {};
+      const fieldMap: Record<string, string[]> = {
+        name: ['name', 'full name', 'fullname', 'first name', 'contact'],
+        email: ['email', 'email address', 'e-mail', 'mail'],
+        field: ['field', 'industry', 'niche', 'sector', 'business type', 'category'],
+        website: ['website', 'url', 'site', 'web', 'domain'],
+        problem: ['problem', 'challenge', 'issue', 'pain point', 'notes', 'description', 'message'],
+      };
+      for (const [key, aliases] of Object.entries(fieldMap)) {
+        const match = cols.find(c => aliases.includes(c.toLowerCase()));
+        if (match) autoMap[key] = match;
+      }
+      setColumnMap(autoMap);
+      setShowImportModal(true);
+    };
+    reader.readAsText(file);
+    if (csvInputRef.current) csvInputRef.current.value = '';
+  };
+
+  const submitImport = async () => {
+    if (!columnMap.name || !columnMap.email || !columnMap.field || !columnMap.problem) {
+      showToast('error', 'Please map all required columns (Name, Email, Industry, Challenge)');
+      return;
+    }
+    setImporting(true);
+    try {
+      const mapped = importData.map(row => ({
+        name: row[columnMap.name] || '',
+        email: row[columnMap.email] || '',
+        field: row[columnMap.field] || '',
+        website: columnMap.website ? row[columnMap.website] || '' : '',
+        problem: row[columnMap.problem] || '',
+      }));
+
+      const res = await fetch('/api/admin/leads', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ leads: mapped }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('success', `Imported ${data.imported} leads (${data.skipped} skipped)`);
+      setShowImportModal(false);
+      setImportData([]);
+      setColumnMap({});
+      fetchLeads();
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : 'Import failed');
+    } finally {
+      setImporting(false);
+    }
   };
 
   const getPreviewHtml = (): string => {
@@ -800,24 +934,42 @@ export function AdminDashboard() {
                   <h2 className="text-2xl font-bold">Leads</h2>
                   <p className="text-sm text-gray-500 mt-1">{leads.length} total, {activeLeads.length} active</p>
                 </div>
-                {selectedLeadIds.size > 0 && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-400">{selectedLeadIds.size} selected</span>
-                    <button
-                      onClick={emailSelected}
-                      className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-medium hover:from-orange-600 hover:to-red-600 transition-all shadow-lg shadow-orange-500/20"
-                    >
-                      <IconMail />
-                      Email Selected
-                    </button>
-                    <button
-                      onClick={() => setSelectedLeadIds(new Set())}
-                      className="p-2 rounded-lg hover:bg-white/5 text-gray-500 hover:text-white transition-colors"
-                    >
-                      <IconX />
-                    </button>
-                  </div>
-                )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {selectedLeadIds.size > 0 && (
+                    <>
+                      <span className="text-sm text-gray-400">{selectedLeadIds.size} selected</span>
+                      <button
+                        onClick={emailSelected}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-medium hover:from-orange-600 hover:to-red-600 transition-all shadow-lg shadow-orange-500/20"
+                      >
+                        <IconMail />
+                        Email Selected
+                      </button>
+                      <button
+                        onClick={() => setSelectedLeadIds(new Set())}
+                        className="p-2 rounded-lg hover:bg-white/5 text-gray-500 hover:text-white transition-colors"
+                      >
+                        <IconX />
+                      </button>
+                    </>
+                  )}
+                  <input
+                    ref={csvInputRef}
+                    type="file"
+                    accept=".csv"
+                    onChange={handleCSVUpload}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => csvInputRef.current?.click()}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.03] border border-white/5 text-sm text-gray-400 hover:text-white hover:bg-white/[0.06] transition-all"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                    </svg>
+                    Import CSV
+                  </button>
+                </div>
               </div>
 
               {/* Search & Filter bar */}
@@ -1204,27 +1356,66 @@ export function AdminDashboard() {
                   )}
                 </div>
 
-                {/* Send button */}
+                {/* Schedule option */}
+                <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-sm font-medium text-gray-300">Schedule for later</label>
+                      <p className="text-xs text-gray-500 mt-0.5">Set a date and time to auto-send this campaign</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setScheduleEnabled(!scheduleEnabled)}
+                      className={`relative w-11 h-6 rounded-full transition-colors ${
+                        scheduleEnabled ? 'bg-orange-500' : 'bg-white/10'
+                      }`}
+                    >
+                      <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                        scheduleEnabled ? 'translate-x-[22px]' : 'translate-x-0.5'
+                      }`} />
+                    </button>
+                  </div>
+                  {scheduleEnabled && (
+                    <div className="mt-4">
+                      <input
+                        type="datetime-local"
+                        value={scheduledAt}
+                        onChange={e => setScheduledAt(e.target.value)}
+                        min={new Date().toISOString().slice(0, 16)}
+                        className="w-full sm:w-auto bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-orange-500/30 transition-all"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Send / Schedule button */}
                 <div className="flex items-center gap-4 pt-2">
                   <button
                     type="submit"
-                    disabled={sending || getRecipientCount() === 0}
+                    disabled={sending || getRecipientCount() === 0 || (scheduleEnabled && !scheduledAt)}
                     className="flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:from-orange-600 hover:to-red-600 transition-all shadow-lg shadow-orange-500/20"
                   >
                     {sending ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Sending...
+                        {scheduleEnabled ? 'Scheduling...' : 'Sending...'}
                       </>
                     ) : (
                       <>
-                        <IconMail />
-                        Send to {getRecipientLabel()}
+                        {scheduleEnabled ? (
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        ) : (
+                          <IconMail />
+                        )}
+                        {scheduleEnabled ? 'Schedule Campaign' : `Send to ${getRecipientLabel()}`}
                       </>
                     )}
                   </button>
                   <p className="text-xs text-gray-500">
                     {getRecipientCount()} recipient{getRecipientCount() !== 1 ? 's' : ''}
+                    {scheduleEnabled && scheduledAt && ` — ${new Date(scheduledAt).toLocaleString()}`}
                   </p>
                 </div>
               </form>
@@ -1268,14 +1459,23 @@ export function AdminDashboard() {
                                 ? 'bg-green-500/10 text-green-400'
                                 : c.status === 'sending'
                                 ? 'bg-yellow-500/10 text-yellow-400'
+                                : c.status === 'scheduled'
+                                ? 'bg-blue-500/10 text-blue-400'
+                                : c.status === 'queued'
+                                ? 'bg-purple-500/10 text-purple-400'
+                                : c.status === 'failed'
+                                ? 'bg-red-500/10 text-red-400'
                                 : 'bg-gray-500/10 text-gray-400'
                             }`}>
                               {c.status}
                             </span>
                           </div>
-                          <div className="flex items-center gap-4 text-sm text-gray-500">
-                            <span>Sent to {c.sentTo} lead{c.sentTo !== 1 ? 's' : ''}</span>
+                          <div className="flex items-center gap-4 text-sm text-gray-500 flex-wrap">
+                            {c.status === 'sent' && <span>Sent to {c.sentTo}/{c.totalLeads || c.sentTo} leads</span>}
+                            {c.status === 'scheduled' && c.scheduledAt && <span>Scheduled for {new Date(c.scheduledAt).toLocaleString()}</span>}
+                            {c.status === 'queued' && <span>Queued — {c.totalLeads || '?'} leads waiting</span>}
                             {c.sentAt && <span>{new Date(c.sentAt).toLocaleString()}</span>}
+                            {!c.sentAt && c.createdAt && <span>Created {new Date(c.createdAt).toLocaleString()}</span>}
                           </div>
                         </div>
                       </div>
@@ -1324,6 +1524,97 @@ export function AdminDashboard() {
             >
               Insert Video
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Import modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowImportModal(false)}>
+          <div className="w-full max-w-lg bg-[#161616] border border-white/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-white/5">
+              <div>
+                <h3 className="font-semibold">Import Leads from CSV</h3>
+                <p className="text-xs text-gray-500 mt-0.5">{importData.length} rows found</p>
+              </div>
+              <button onClick={() => setShowImportModal(false)} className="p-1 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white">
+                <IconX />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-gray-400">
+                Map your CSV columns to lead fields. Required: Name, Email, Industry, Challenge.
+              </p>
+
+              {/* Column mapping */}
+              {[
+                { key: 'name', label: 'Name', required: true },
+                { key: 'email', label: 'Email', required: true },
+                { key: 'field', label: 'Industry', required: true },
+                { key: 'website', label: 'Website', required: false },
+                { key: 'problem', label: 'Challenge', required: true },
+              ].map(({ key, label, required }) => (
+                <div key={key} className="flex items-center gap-3">
+                  <label className="w-24 text-sm text-gray-400 flex-shrink-0">
+                    {label} {required && <span className="text-red-400">*</span>}
+                  </label>
+                  <select
+                    value={columnMap[key] || ''}
+                    onChange={e => setColumnMap(prev => ({ ...prev, [key]: e.target.value }))}
+                    className="flex-1 appearance-none bg-white/[0.03] border border-white/5 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-orange-500/30"
+                  >
+                    <option value="">— Select column —</option>
+                    {importData.length > 0 && Object.keys(importData[0]).map(col => (
+                      <option key={col} value={col}>{col}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+
+              {/* Preview */}
+              {importData.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-xs text-gray-500 mb-2">Preview (first 3 rows):</p>
+                  <div className="overflow-x-auto rounded-lg border border-white/5">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-white/[0.03]">
+                          {Object.keys(importData[0]).map(col => (
+                            <th key={col} className="px-3 py-2 text-left text-gray-400 font-medium">{col}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importData.slice(0, 3).map((row, i) => (
+                          <tr key={i} className="border-t border-white/5">
+                            {Object.values(row).map((val, j) => (
+                              <td key={j} className="px-3 py-2 text-gray-300 max-w-[150px] truncate">{val}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-5 border-t border-white/5 flex items-center gap-3">
+              <button
+                onClick={submitImport}
+                disabled={importing}
+                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:from-orange-600 hover:to-red-600 transition-all"
+              >
+                {importing ? 'Importing...' : `Import ${importData.length} Leads`}
+              </button>
+              <button
+                onClick={() => setShowImportModal(false)}
+                className="px-6 py-3 rounded-xl bg-white/[0.03] border border-white/5 text-gray-400 hover:text-white transition-all"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
