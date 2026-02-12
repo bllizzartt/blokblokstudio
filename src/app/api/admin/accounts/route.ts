@@ -43,9 +43,7 @@ export async function POST(req: NextRequest) {
     console.error('Add account error:', errMsg);
     const msg = errMsg.includes('Unique')
       ? 'This email is already added'
-      : errMsg.includes('does not exist') || errMsg.includes('relation') || errMsg.includes('table')
-      ? 'Database table not found — run "npx prisma db push" to create it'
-      : `Failed to add account: ${errMsg.slice(0, 120)}`;
+      : `Failed to add account: ${errMsg.slice(0, 200)}`;
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
