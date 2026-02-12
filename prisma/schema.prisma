@@ -25,6 +25,37 @@ model Lead {
   updatedAt DateTime @updatedAt
 }
 
+model SendingAccount {
+  id          String   @id @default(cuid())
+  label       String   // e.g. "chase@blokblok.com"
+  email       String   @unique
+  smtpHost    String
+  smtpPort    Int      @default(587)
+  smtpUser    String
+  smtpPass    String
+  dailyLimit  Int      @default(20)
+  sentToday   Int      @default(0)
+  lastResetAt DateTime @default(now())
+  warmupPhase Int      @default(1) // 1=5/day, 2=15/day, 3=30/day, 4=50/day, 5=100/day
+  warmupStart DateTime @default(now())
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  dailyLogs SendingLog[]
+}
+
+model SendingLog {
+  id        String   @id @default(cuid())
+  accountId String
+  account   SendingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  date      String   // YYYY-MM-DD for easy grouping
+  sent      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([accountId, date])
+}
+
 model EmailCampaign {
   id          String    @id @default(cuid())
   subject     String
@@ -36,4 +67,41 @@ model EmailCampaign {
   leadIds     String?   // JSON array of specific lead IDs, null = all active
   status      String    @default("draft") // draft, queued, scheduled, sending, sent, failed
   createdAt   DateTime  @default(now())
+}
+
+model Sequence {
+  id          String         @id @default(cuid())
+  name        String
+  active      Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  steps       SequenceStep[]
+  enrollments SequenceEnrollment[]
+}
+
+model SequenceStep {
+  id         String   @id @default(cuid())
+  sequenceId String
+  sequence   Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  order      Int      // 1, 2, 3...
+  delayDays  Int      // days after previous step (0 for first)
+  subject    String
+  body       String
+  createdAt  DateTime @default(now())
+
+  @@unique([sequenceId, order])
+}
+
+model SequenceEnrollment {
+  id          String    @id @default(cuid())
+  sequenceId  String
+  sequence    Sequence  @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  leadId      String
+  currentStep Int       @default(0) // which step they're on (0 = not started)
+  nextSendAt  DateTime? // when to send the next step
+  status      String    @default("active") // active, completed, paused, unsubscribed
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([sequenceId, leadId])
 }

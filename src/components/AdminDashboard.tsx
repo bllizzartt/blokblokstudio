@@ -29,8 +29,32 @@ interface Campaign {
   createdAt: string;
 }
 
-type Tab = 'dashboard' | 'leads' | 'compose' | 'history';
+type Tab = 'dashboard' | 'leads' | 'compose' | 'history' | 'accounts' | 'sequences' | 'warmup';
 type SendTarget = 'all' | 'selected' | 'individual';
+
+interface AccountStat {
+  id: string;
+  label: string;
+  email: string;
+  warmupPhase: number;
+  phaseLabel: string;
+  dailyLimit: number;
+  sentToday: number;
+  daysSinceStart: number;
+  totalSent: number;
+  healthScore: number;
+  dailyLogs: { date: string; sent: number }[];
+}
+
+interface SequenceData {
+  id: string;
+  name: string;
+  active: boolean;
+  steps: { id: string; order: number; delayDays: number; subject: string; body: string }[];
+  enrolledCount: number;
+  activeCount: number;
+  completedCount: number;
+}
 
 // ── Icon components ──
 function IconDashboard() {
@@ -238,6 +262,17 @@ export function AdminDashboard() {
   const [columnMap, setColumnMap] = useState<Record<string, string>>({});
   const csvInputRef = useRef<HTMLInputElement>(null);
 
+  // Accounts & Warmup
+  const [accounts, setAccounts] = useState<AccountStat[]>([]);
+  const [showAddAccount, setShowAddAccount] = useState(false);
+  const [newAccount, setNewAccount] = useState({ email: '', smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', label: '' });
+
+  // Sequences
+  const [sequences, setSequences] = useState<SequenceData[]>([]);
+  const [showCreateSeq, setShowCreateSeq] = useState(false);
+  const [newSeqName, setNewSeqName] = useState('');
+  const [newSeqSteps, setNewSeqSteps] = useState([{ subject: '', body: '', delayDays: 0 }]);
+
   // Sidebar collapsed on mobile
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -277,6 +312,26 @@ export function AdminDashboard() {
     }
   }, [headers]);
 
+  const fetchAccounts = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/accounts', { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        setAccounts(data.accounts);
+      }
+    } catch { /* silently fail */ }
+  }, [headers]);
+
+  const fetchSequences = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/sequences', { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        setSequences(data.sequences);
+      }
+    } catch { /* silently fail */ }
+  }, [headers]);
+
   const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const pw = password;
@@ -290,6 +345,8 @@ export function AdminDashboard() {
       const data = await res.json();
       setLeads(data.leads);
       fetchCampaigns();
+      fetchAccounts();
+      fetchSequences();
     } else {
       localStorage.removeItem('bb_admin_pw');
       if (e) showToast('error', 'Wrong password');
@@ -308,8 +365,10 @@ export function AdminDashboard() {
     if (authed) {
       fetchLeads();
       fetchCampaigns();
+      fetchAccounts();
+      fetchSequences();
     }
-  }, [authed, fetchLeads, fetchCampaigns]);
+  }, [authed, fetchLeads, fetchCampaigns, fetchAccounts, fetchSequences]);
 
   // ── Derived data ──
   const activeLeads = leads.filter(l => !l.unsubscribed);
@@ -735,6 +794,9 @@ export function AdminDashboard() {
     { id: 'dashboard', label: 'Dashboard', icon: <IconDashboard /> },
     { id: 'leads', label: 'Leads', icon: <IconLeads />, badge: leads.length },
     { id: 'compose', label: 'Compose', icon: <IconCompose /> },
+    { id: 'sequences', label: 'Sequences', icon: <IconHistory /> },
+    { id: 'accounts', label: 'Accounts', icon: <IconMail />, badge: accounts.length },
+    { id: 'warmup', label: 'Warmup', icon: <IconVideo /> },
     { id: 'history', label: 'History', icon: <IconHistory />, badge: campaigns.length },
   ];
 
@@ -1482,6 +1544,444 @@ export function AdminDashboard() {
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* ── ACCOUNTS TAB ── */}
+          {tab === 'accounts' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">Sending Accounts</h2>
+                  <p className="text-sm text-gray-500 mt-1">{accounts.length} SMTP accounts configured</p>
+                </div>
+                <button
+                  onClick={() => setShowAddAccount(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-medium"
+                >
+                  + Add Account
+                </button>
+              </div>
+
+              {accounts.length === 0 ? (
+                <div className="text-center py-16 rounded-2xl bg-white/[0.02] border border-white/5">
+                  <p className="text-gray-500 mb-2">No sending accounts yet</p>
+                  <p className="text-xs text-gray-600">Add your SMTP email accounts to enable multi-account rotation</p>
+                  <button onClick={() => setShowAddAccount(true)} className="mt-4 text-sm text-orange-400 hover:text-orange-300">
+                    Add your first account
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {accounts.map(acc => (
+                    <div key={acc.id} className="rounded-2xl bg-white/[0.02] border border-white/5 p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-1">
+                            <h3 className="font-semibold">{acc.label}</h3>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400">
+                              Phase {acc.warmupPhase}
+                            </span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              acc.healthScore >= 70 ? 'bg-green-500/10 text-green-400' :
+                              acc.healthScore >= 40 ? 'bg-yellow-500/10 text-yellow-400' :
+                              'bg-red-500/10 text-red-400'
+                            }`}>
+                              {acc.healthScore}% health
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500">{acc.email} &middot; Day {acc.daysSinceStart} &middot; {acc.totalSent} total sent</p>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (!confirm('Delete this sending account?')) return;
+                            await fetch(`/api/admin/accounts?id=${acc.id}`, { method: 'DELETE', headers: headers() });
+                            fetchAccounts();
+                          }}
+                          className="p-2 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400"
+                        >
+                          <IconTrash />
+                        </button>
+                      </div>
+                      <div className="mt-3 flex items-center gap-4">
+                        <div className="flex-1">
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-gray-500">Today: {acc.sentToday}/{acc.dailyLimit}</span>
+                            <span className="text-gray-500">{acc.phaseLabel}</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-orange-500 to-red-500 transition-all"
+                              style={{ width: `${Math.min((acc.sentToday / acc.dailyLimit) * 100, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add account modal */}
+              {showAddAccount && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowAddAccount(false)}>
+                  <div className="w-full max-w-md bg-[#161616] border border-white/10 rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+                    <h3 className="font-semibold mb-4">Add Sending Account</h3>
+                    <div className="space-y-3">
+                      <input placeholder="Label (e.g. Chase - Blokblok)" value={newAccount.label} onChange={e => setNewAccount(p => ({ ...p, label: e.target.value }))} className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30" />
+                      <input placeholder="Email address" value={newAccount.email} onChange={e => setNewAccount(p => ({ ...p, email: e.target.value }))} className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30" />
+                      <input placeholder="SMTP Host (e.g. smtp.gmail.com)" value={newAccount.smtpHost} onChange={e => setNewAccount(p => ({ ...p, smtpHost: e.target.value }))} className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30" />
+                      <input placeholder="SMTP Port (587)" type="number" value={newAccount.smtpPort} onChange={e => setNewAccount(p => ({ ...p, smtpPort: parseInt(e.target.value) || 587 }))} className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30" />
+                      <input placeholder="SMTP Username" value={newAccount.smtpUser} onChange={e => setNewAccount(p => ({ ...p, smtpUser: e.target.value }))} className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30" />
+                      <input placeholder="SMTP Password / App Password" type="password" value={newAccount.smtpPass} onChange={e => setNewAccount(p => ({ ...p, smtpPass: e.target.value }))} className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30" />
+                    </div>
+                    <div className="flex gap-2 mt-5">
+                      <button
+                        onClick={async () => {
+                          const res = await fetch('/api/admin/accounts', { method: 'POST', headers: headers(), body: JSON.stringify(newAccount) });
+                          const data = await res.json();
+                          if (!res.ok) { showToast('error', data.error); return; }
+                          showToast('success', 'Account added!');
+                          setShowAddAccount(false);
+                          setNewAccount({ email: '', smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', label: '' });
+                          fetchAccounts();
+                        }}
+                        className="flex-1 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold"
+                      >
+                        Add Account
+                      </button>
+                      <button onClick={() => setShowAddAccount(false)} className="px-6 py-3 rounded-xl bg-white/[0.03] border border-white/5 text-gray-400">Cancel</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── SEQUENCES TAB ── */}
+          {tab === 'sequences' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">Email Sequences</h2>
+                  <p className="text-sm text-gray-500 mt-1">Multi-step drip campaigns</p>
+                </div>
+                <button
+                  onClick={() => setShowCreateSeq(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-medium"
+                >
+                  + New Sequence
+                </button>
+              </div>
+
+              {sequences.length === 0 && !showCreateSeq ? (
+                <div className="text-center py-16 rounded-2xl bg-white/[0.02] border border-white/5">
+                  <p className="text-gray-500 mb-2">No sequences yet</p>
+                  <p className="text-xs text-gray-600">Create a multi-step email sequence to nurture leads automatically</p>
+                  <button onClick={() => setShowCreateSeq(true)} className="mt-4 text-sm text-orange-400">Create your first sequence</button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {sequences.map(seq => (
+                    <div key={seq.id} className="rounded-2xl bg-white/[0.02] border border-white/5 p-5">
+                      <div className="flex items-start justify-between gap-4 mb-4">
+                        <div>
+                          <div className="flex items-center gap-3">
+                            <h3 className="font-semibold">{seq.name}</h3>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${seq.active ? 'bg-green-500/10 text-green-400' : 'bg-gray-500/10 text-gray-400'}`}>
+                              {seq.active ? 'Active' : 'Paused'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {seq.steps.length} steps &middot; {seq.enrolledCount} enrolled &middot; {seq.activeCount} active &middot; {seq.completedCount} completed
+                          </p>
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={async () => {
+                              await fetch('/api/admin/sequences', {
+                                method: 'PATCH',
+                                headers: headers(),
+                                body: JSON.stringify({ id: seq.id, active: !seq.active }),
+                              });
+                              fetchSequences();
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs bg-white/[0.03] border border-white/5 text-gray-400 hover:text-white"
+                          >
+                            {seq.active ? 'Pause' : 'Resume'}
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (selectedLeadIds.size === 0) {
+                                showToast('error', 'Select leads in the Leads tab first');
+                                return;
+                              }
+                              const res = await fetch('/api/admin/sequences', {
+                                method: 'PATCH',
+                                headers: headers(),
+                                body: JSON.stringify({ id: seq.id, action: 'enroll', leadIds: [...selectedLeadIds] }),
+                              });
+                              const data = await res.json();
+                              if (res.ok) showToast('success', `Enrolled ${data.enrolled} leads`);
+                              fetchSequences();
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs bg-orange-500/10 text-orange-400 hover:bg-orange-500/20"
+                          >
+                            Enroll Selected ({selectedLeadIds.size})
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (!confirm('Delete this sequence?')) return;
+                              await fetch(`/api/admin/sequences?id=${seq.id}`, { method: 'DELETE', headers: headers() });
+                              fetchSequences();
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400"
+                          >
+                            <IconTrash />
+                          </button>
+                        </div>
+                      </div>
+                      {/* Steps timeline */}
+                      <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                        {seq.steps.map((step, i) => (
+                          <div key={step.id} className="flex items-center gap-2 flex-shrink-0">
+                            <div className="rounded-xl bg-white/[0.03] border border-white/5 px-4 py-3 min-w-[180px]">
+                              <p className="text-xs text-orange-400 font-medium mb-1">
+                                Step {step.order} {step.delayDays > 0 ? `(+${step.delayDays}d)` : '(immediate)'}
+                              </p>
+                              <p className="text-sm truncate">{step.subject}</p>
+                            </div>
+                            {i < seq.steps.length - 1 && (
+                              <svg className="w-4 h-4 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Create sequence modal */}
+              {showCreateSeq && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowCreateSeq(false)}>
+                  <div className="w-full max-w-2xl bg-[#161616] border border-white/10 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                    <div className="p-6 border-b border-white/5">
+                      <h3 className="font-semibold">Create Email Sequence</h3>
+                    </div>
+                    <div className="p-6 space-y-4">
+                      <input
+                        placeholder="Sequence name (e.g. New Lead Nurture)"
+                        value={newSeqName}
+                        onChange={e => setNewSeqName(e.target.value)}
+                        className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30"
+                      />
+                      {newSeqSteps.map((step, i) => (
+                        <div key={i} className="rounded-xl bg-white/[0.02] border border-white/5 p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-orange-400">Step {i + 1}</span>
+                            <div className="flex items-center gap-2">
+                              <label className="text-xs text-gray-500">Delay:</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={step.delayDays}
+                                onChange={e => {
+                                  const s = [...newSeqSteps];
+                                  s[i].delayDays = parseInt(e.target.value) || 0;
+                                  setNewSeqSteps(s);
+                                }}
+                                className="w-16 bg-white/[0.03] border border-white/5 rounded-lg px-2 py-1 text-sm text-white text-center"
+                              />
+                              <span className="text-xs text-gray-500">days</span>
+                              {newSeqSteps.length > 1 && (
+                                <button onClick={() => setNewSeqSteps(s => s.filter((_, j) => j !== i))} className="p-1 text-gray-500 hover:text-red-400"><IconX /></button>
+                              )}
+                            </div>
+                          </div>
+                          <input
+                            placeholder="Subject line"
+                            value={step.subject}
+                            onChange={e => { const s = [...newSeqSteps]; s[i].subject = e.target.value; setNewSeqSteps(s); }}
+                            className="w-full bg-white/[0.03] border border-white/5 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30"
+                          />
+                          <textarea
+                            placeholder="Email body (HTML, supports {{name}}, {{field}}, etc.)"
+                            rows={4}
+                            value={step.body}
+                            onChange={e => { const s = [...newSeqSteps]; s[i].body = e.target.value; setNewSeqSteps(s); }}
+                            className="w-full bg-white/[0.03] border border-white/5 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30 font-mono resize-y"
+                          />
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => setNewSeqSteps(s => [...s, { subject: '', body: '', delayDays: 2 }])}
+                        className="w-full py-2.5 rounded-xl border border-dashed border-white/10 text-sm text-gray-400 hover:text-white hover:border-white/20"
+                      >
+                        + Add Step
+                      </button>
+                    </div>
+                    <div className="p-6 border-t border-white/5 flex gap-2">
+                      <button
+                        onClick={async () => {
+                          if (!newSeqName || newSeqSteps.some(s => !s.subject || !s.body)) {
+                            showToast('error', 'Fill in all step subjects and bodies');
+                            return;
+                          }
+                          const res = await fetch('/api/admin/sequences', {
+                            method: 'POST',
+                            headers: headers(),
+                            body: JSON.stringify({ name: newSeqName, steps: newSeqSteps }),
+                          });
+                          if (res.ok) {
+                            showToast('success', 'Sequence created!');
+                            setShowCreateSeq(false);
+                            setNewSeqName('');
+                            setNewSeqSteps([{ subject: '', body: '', delayDays: 0 }]);
+                            fetchSequences();
+                          } else {
+                            const data = await res.json();
+                            showToast('error', data.error);
+                          }
+                        }}
+                        className="flex-1 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold"
+                      >
+                        Create Sequence
+                      </button>
+                      <button onClick={() => setShowCreateSeq(false)} className="px-6 py-3 rounded-xl bg-white/[0.03] border border-white/5 text-gray-400">Cancel</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── WARMUP TAB ── */}
+          {tab === 'warmup' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-2xl font-bold">Warmup Dashboard</h2>
+                <p className="text-sm text-gray-500 mt-1">Monitor your email sending accounts and domain health</p>
+              </div>
+
+              {accounts.length === 0 ? (
+                <div className="text-center py-16 rounded-2xl bg-white/[0.02] border border-white/5">
+                  <p className="text-gray-500 mb-2">No accounts to monitor</p>
+                  <button onClick={() => setTab('accounts')} className="text-sm text-orange-400">Add sending accounts first</button>
+                </div>
+              ) : (
+                <>
+                  {/* Summary cards */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-5">
+                      <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Total Accounts</p>
+                      <p className="text-3xl font-bold bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">{accounts.length}</p>
+                    </div>
+                    <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-5">
+                      <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Sent Today</p>
+                      <p className="text-3xl font-bold bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">{accounts.reduce((s, a) => s + a.sentToday, 0)}</p>
+                      <p className="text-xs text-gray-600 mt-1">of {accounts.reduce((s, a) => s + a.dailyLimit, 0)} daily limit</p>
+                    </div>
+                    <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-5">
+                      <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Avg Health</p>
+                      <p className="text-3xl font-bold bg-gradient-to-r from-green-500 to-emerald-500 bg-clip-text text-transparent">
+                        {accounts.length > 0 ? Math.round(accounts.reduce((s, a) => s + a.healthScore, 0) / accounts.length) : 0}%
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-5">
+                      <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">All-Time Sent</p>
+                      <p className="text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">{accounts.reduce((s, a) => s + a.totalSent, 0)}</p>
+                    </div>
+                  </div>
+
+                  {/* Per-account warmup detail */}
+                  {accounts.map(acc => (
+                    <div key={acc.id} className="rounded-2xl bg-white/[0.02] border border-white/5 p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className="font-semibold">{acc.label}</h3>
+                          <p className="text-xs text-gray-500">{acc.email} &middot; Day {acc.daysSinceStart}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400">{acc.phaseLabel}</span>
+                          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                            acc.healthScore >= 70 ? 'bg-green-500/10 text-green-400' :
+                            acc.healthScore >= 40 ? 'bg-yellow-500/10 text-yellow-400' :
+                            'bg-red-500/10 text-red-400'
+                          }`}>
+                            {acc.healthScore}% health
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Daily limit bar */}
+                      <div className="mb-4">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-gray-500">Today: {acc.sentToday} / {acc.dailyLimit} emails</span>
+                          <span className="text-gray-500">{Math.round((acc.sentToday / acc.dailyLimit) * 100)}% used</span>
+                        </div>
+                        <div className="h-3 rounded-full bg-white/5 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              acc.sentToday / acc.dailyLimit > 0.9 ? 'bg-red-500' :
+                              acc.sentToday / acc.dailyLimit > 0.7 ? 'bg-yellow-500' :
+                              'bg-gradient-to-r from-green-500 to-emerald-500'
+                            }`}
+                            style={{ width: `${Math.min((acc.sentToday / acc.dailyLimit) * 100, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* 14-day volume chart */}
+                      <div>
+                        <p className="text-xs text-gray-500 mb-2">Send volume (last 14 days)</p>
+                        <div className="flex items-end gap-1 h-16">
+                          {Array.from({ length: 14 }, (_, i) => {
+                            const d = new Date();
+                            d.setDate(d.getDate() - (13 - i));
+                            const dateStr = d.toISOString().slice(0, 10);
+                            const log = acc.dailyLogs.find(l => l.date === dateStr);
+                            const sent = log?.sent || 0;
+                            const maxSent = Math.max(...acc.dailyLogs.map(l => l.sent), 1);
+                            const height = sent > 0 ? Math.max((sent / maxSent) * 100, 8) : 4;
+                            return (
+                              <div key={dateStr} className="flex-1 flex flex-col items-center gap-1" title={`${dateStr}: ${sent} sent`}>
+                                <div
+                                  className={`w-full rounded-sm transition-all ${sent > 0 ? 'bg-gradient-to-t from-orange-500 to-orange-400' : 'bg-white/5'}`}
+                                  style={{ height: `${height}%` }}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="flex justify-between text-[9px] text-gray-600 mt-1">
+                          <span>14d ago</span>
+                          <span>Today</span>
+                        </div>
+                      </div>
+
+                      {/* Warmup phases */}
+                      <div className="mt-4 flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map(phase => (
+                          <div
+                            key={phase}
+                            className={`flex-1 h-1.5 rounded-full ${
+                              phase <= acc.warmupPhase ? 'bg-orange-500' : 'bg-white/5'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <div className="flex justify-between text-[9px] text-gray-600 mt-1">
+                        <span>5/day</span>
+                        <span>15/day</span>
+                        <span>30/day</span>
+                        <span>50/day</span>
+                        <span>100/day</span>
+                      </div>
+                    </div>
+                  ))}
+                </>
               )}
             </div>
           )}
