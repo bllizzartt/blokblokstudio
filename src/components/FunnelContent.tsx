@@ -422,34 +422,12 @@ const included = [
   { item: 'Social media integration', icon: '🔗' },
 ];
 
-const pricingPlans = [
-  {
-    name: 'Starter',
-    price: '$2,500',
-    desc: 'Perfect for small businesses and startups who need a strong foundation.',
-    features: ['Custom landing page', 'Mobile responsive design', 'Basic SEO setup', 'Contact form integration', '30-day support'],
-    cta: 'Get Started',
-    featured: false,
-    color: 'border-white/10',
-  },
-  {
-    name: 'Growth',
-    price: '$5,000',
-    desc: 'For brands ready to level up their digital presence and start converting.',
-    features: ['Multi-page website (up to 8)', 'Custom brand identity', 'Advanced SEO strategy', 'CMS integration', 'Analytics dashboard', '60-day support'],
-    cta: 'Most Popular',
-    featured: true,
-    color: 'border-orange-500/30',
-  },
-  {
-    name: 'Enterprise',
-    price: 'Custom',
-    desc: 'Full-scale digital transformation for established businesses.',
-    features: ['Unlimited pages & features', 'Complete brand overhaul', 'Web & mobile app development', 'Marketing automation', 'Dedicated team', '90-day priority support'],
-    cta: 'Let\'s Talk',
-    featured: false,
-    color: 'border-white/10',
-  },
+const auditBenefits = [
+  'Personalized website & brand review',
+  'Conversion optimization tips',
+  'SEO quick-wins you can implement today',
+  'Competitor analysis snapshot',
+  'Custom recommendations for your industry',
 ];
 
 const idealFor = [
@@ -468,29 +446,197 @@ const faqs = [
   { q: 'Can I update the website myself after launch?', a: 'Absolutely. We build with user-friendly CMS platforms so you can easily update content, images, and pages without any coding knowledge.' },
   { q: 'What\'s included in post-launch support?', a: 'Our support includes bug fixes, minor content updates, performance monitoring, security updates, and priority access to our team via email or Slack.' },
   { q: 'Do you work with clients outside the US?', a: 'Yes! We work with clients worldwide. Our process is fully remote with regular video check-ins to keep everything on track regardless of timezone.' },
-  { q: 'What if I just want to chat first before committing?', a: 'That\'s exactly what the free 15-minute call is for. Zero pressure, zero commitment — just a conversation about your goals and how we might help.' },
+  { q: 'What if I just want to learn more before committing?', a: 'That\'s exactly what the free audit is for. Fill out the form, get a personalized review of your digital presence, and then decide if you\'d like to take the next step. Zero pressure, zero commitment.' },
 ];
 
-/* ── CTA Button ──
- * TODO: Replace href="#book" with your Calendly URL:
- * href="https://calendly.com/your-username/15min"
- */
-function CTAButton({ text = 'Book Your Free 15-Min Call', className = '', variant = 'primary' }: { text?: string; className?: string; variant?: 'primary' | 'secondary' }) {
+/* ── CTA Button ── */
+function CTAButton({ text = 'Get Your Free Audit', className = '', variant = 'primary' }: { text?: string; className?: string; variant?: 'primary' | 'secondary' }) {
   const base = variant === 'primary'
     ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-400 hover:to-red-400 shadow-lg shadow-orange-500/20'
     : 'bg-white/10 text-white hover:bg-white/20 border border-white/10';
   return (
     <motion.a
-      href="#book"
+      href="#audit"
       whileHover={{ scale: 1.03 }}
       whileTap={{ scale: 0.98 }}
       className={`inline-flex items-center gap-3 px-8 sm:px-10 py-4 sm:py-5 rounded-full font-semibold text-sm sm:text-base transition-all ${base} ${className}`}
     >
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {text}
     </motion.a>
+  );
+}
+
+/* ── Audit Lead Capture Form ── */
+function AuditForm() {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    field: '',
+    website: '',
+    noWebsite: false,
+    problem: '',
+  });
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    // TODO: Connect to your email service (Mailchimp, ConvertKit, Resend, etc.)
+    // Example: await fetch('/api/audit', { method: 'POST', body: JSON.stringify(formData) });
+    await new Promise((r) => setTimeout(r, 1500)); // Simulated delay
+    setSubmitted(true);
+    setSubmitting(false);
+  };
+
+  if (submitted) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="text-center py-12 sm:py-16"
+      >
+        <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+          <svg className="w-10 h-10 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h3 className="text-2xl sm:text-3xl font-bold mb-3">You&apos;re In!</h3>
+        <p className="text-gray-400 text-base sm:text-lg max-w-md mx-auto mb-6">
+          We&apos;ll send your personalized audit to <strong className="text-white">{formData.email}</strong> within 24 hours.
+        </p>
+        <p className="text-sm text-gray-500">Keep an eye on your inbox (check spam too).</p>
+      </motion.div>
+    );
+  }
+
+  const inputBase = 'w-full bg-white/[0.04] border border-white/10 rounded-xl px-4 py-3.5 text-sm sm:text-base text-white placeholder-gray-500 focus:outline-none focus:border-orange-500/40 focus:bg-white/[0.06] transition-colors';
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label htmlFor="audit-name" className="block text-xs text-gray-400 mb-1.5 ml-1">Your Name</label>
+          <input
+            id="audit-name"
+            type="text"
+            required
+            placeholder="John Smith"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            className={inputBase}
+          />
+        </div>
+        <div>
+          <label htmlFor="audit-email" className="block text-xs text-gray-400 mb-1.5 ml-1">Email Address</label>
+          <input
+            id="audit-email"
+            type="email"
+            required
+            placeholder="john@company.com"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            className={inputBase}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor="audit-field" className="block text-xs text-gray-400 mb-1.5 ml-1">Field of Work / Industry</label>
+        <input
+          id="audit-field"
+          type="text"
+          required
+          placeholder="e.g. E-commerce, SaaS, Healthcare, Real Estate..."
+          value={formData.field}
+          onChange={(e) => setFormData({ ...formData, field: e.target.value })}
+          className={inputBase}
+        />
+      </div>
+
+      <div>
+        <label htmlFor="audit-website" className="block text-xs text-gray-400 mb-1.5 ml-1">Current Website URL</label>
+        <div className="relative">
+          <input
+            id="audit-website"
+            type="url"
+            placeholder="https://yourwebsite.com"
+            disabled={formData.noWebsite}
+            value={formData.noWebsite ? '' : formData.website}
+            onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+            className={`${inputBase} ${formData.noWebsite ? 'opacity-40 cursor-not-allowed' : ''}`}
+          />
+        </div>
+        <label className="flex items-center gap-2.5 mt-2.5 ml-1 cursor-pointer group">
+          <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
+            formData.noWebsite
+              ? 'bg-orange-500/20 border-orange-500/40'
+              : 'bg-white/[0.04] border-white/10 group-hover:border-white/20'
+          }`}>
+            {formData.noWebsite && (
+              <svg className="w-3 h-3 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </div>
+          <input
+            type="checkbox"
+            className="sr-only"
+            checked={formData.noWebsite}
+            onChange={(e) => setFormData({ ...formData, noWebsite: e.target.checked, website: '' })}
+          />
+          <span className="text-sm text-gray-400">I don&apos;t have a website yet — <span className="text-orange-400">we&apos;ll take care of that for you</span></span>
+        </label>
+      </div>
+
+      <div>
+        <label htmlFor="audit-problem" className="block text-xs text-gray-400 mb-1.5 ml-1">What&apos;s your biggest challenge right now?</label>
+        <textarea
+          id="audit-problem"
+          required
+          rows={3}
+          placeholder="e.g. My website doesn't convert visitors, I need a complete rebrand, I'm launching a new product and need a site fast..."
+          value={formData.problem}
+          onChange={(e) => setFormData({ ...formData, problem: e.target.value })}
+          className={`${inputBase} resize-none`}
+        />
+      </div>
+
+      <motion.button
+        type="submit"
+        disabled={submitting}
+        whileHover={{ scale: submitting ? 1 : 1.02 }}
+        whileTap={{ scale: submitting ? 1 : 0.98 }}
+        className="w-full flex items-center justify-center gap-3 px-8 py-4 sm:py-5 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold text-sm sm:text-base shadow-lg shadow-orange-500/20 hover:from-orange-400 hover:to-red-400 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        {submitting ? (
+          <>
+            <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Sending...
+          </>
+        ) : (
+          <>
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Get My Free Audit
+          </>
+        )}
+      </motion.button>
+
+      <p className="text-xs text-gray-600 text-center flex items-center justify-center gap-1.5">
+        <svg className="w-3.5 h-3.5 text-green-500/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+        We never share your info. Unsubscribe anytime.
+      </p>
+    </form>
   );
 }
 
@@ -659,7 +805,7 @@ export function FunnelContent() {
             className="text-xs text-gray-600 mt-6 flex items-center justify-center gap-2"
           >
             <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-            Free 15-min call. No commitment required.
+            Free audit. No commitment required.
           </motion.p>
         </div>
 
@@ -853,7 +999,7 @@ export function FunnelContent() {
           </div>
 
           <div className="text-center mt-10">
-            <CTAButton text="Join These Brands — Book a Call" />
+            <CTAButton text="Join These Brands — Get Your Free Audit" />
           </div>
         </div>
       </section>
@@ -1065,7 +1211,7 @@ export function FunnelContent() {
           </div>
 
           <div className="text-center mt-16">
-            <CTAButton text="Start With Step 1 — Book a Call" />
+            <CTAButton text="Start With Step 1 — Get Your Free Audit" />
           </div>
         </div>
       </section>
@@ -1195,70 +1341,105 @@ export function FunnelContent() {
           </motion.div>
 
           <div className="text-center mt-12">
-            <CTAButton text="Get All This — Book a Call" />
+            <CTAButton text="Get All This — Claim Your Free Audit" />
           </div>
         </div>
       </section>
 
       {/* ================================================================
-       * 14. PRICING PLANS — Visual pricing cards
+       * 14. FREE AUDIT — Lead capture form
+       *
+       * TODO: Connect the form to your email service (Mailchimp,
+       * ConvertKit, Resend, etc.) in the AuditForm handleSubmit function.
        * ================================================================ */}
-      <Section className="py-20 sm:py-28 lg:py-36 px-5 sm:px-6">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-14 sm:mb-20">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs mb-6">
-              Pricing
-            </div>
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold">
-              Transparent Pricing, No Surprises
-            </h2>
-            <p className="text-gray-400 text-base sm:text-lg max-w-2xl mx-auto mt-6">
-              Every project is unique. These are starting points — we&apos;ll build a custom quote on our call.
-            </p>
-          </div>
+      <section id="audit" className="py-20 sm:py-28 lg:py-36 px-5 sm:px-6 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-orange-500/[0.03] via-red-500/[0.015] to-transparent" />
+        <motion.div
+          className="absolute top-1/4 right-0 w-[500px] h-[500px] rounded-full bg-orange-500/[0.03] blur-[120px]"
+          animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
+          transition={{ duration: 10, repeat: Infinity }}
+        />
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5 pt-4">
-            {pricingPlans.map((plan, i) => (
-              <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: i * 0.1 }} variants={fadeUp}
-                className={`relative rounded-2xl sm:rounded-3xl p-6 sm:p-8 flex flex-col border ${plan.color} ${
-                  plan.featured ? 'bg-gradient-to-b from-orange-500/[0.08] to-transparent' : 'bg-white/[0.02]'
-                }`}>
-                {plan.featured && (
-                  <>
-                    <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-orange-500 to-transparent rounded-t-2xl sm:rounded-t-3xl" />
-                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10">
-                      <span className="px-4 py-1.5 rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs font-semibold shadow-lg shadow-orange-500/20">
-                        Most Popular
-                      </span>
-                    </div>
-                  </>
-                )}
-                <h3 className="text-lg sm:text-xl font-semibold mb-2 mt-2">{plan.name}</h3>
-                <div className="mb-4">
-                  <span className="text-3xl sm:text-4xl font-bold">{plan.price}</span>
-                  {plan.price !== 'Custom' && <span className="text-sm text-gray-500 ml-1">starting</span>}
-                </div>
-                <p className="text-sm text-gray-400 mb-6">{plan.desc}</p>
-                <ul className="space-y-3 mb-8 flex-1">
-                  {plan.features.map((f, j) => (
-                    <li key={j} className="flex items-center gap-3 text-sm text-gray-300">
-                      <svg className="w-4 h-4 flex-shrink-0 text-orange-500/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      {f}
-                    </li>
+        <div className="max-w-5xl mx-auto relative z-10">
+          <Section>
+            <div className="text-center mb-14 sm:mb-16">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs mb-6">
+                100% Free — No Strings Attached
+              </div>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4">
+                Get Your Free{' '}
+                <span className="bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent">Website Audit</span>
+              </h2>
+              <p className="text-gray-400 text-base sm:text-lg max-w-2xl mx-auto">
+                Tell us about your business and we&apos;ll send you a personalized audit with actionable insights — within 24 hours.
+              </p>
+            </div>
+          </Section>
+
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-10 lg:gap-14">
+            {/* Form — takes 3 columns */}
+            <motion.div
+              initial="hidden" whileInView="visible" viewport={{ once: true }}
+              transition={{ duration: 0.5 }} variants={fadeUp}
+              className="lg:col-span-3 rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-10 bg-white/[0.02] border border-white/5"
+            >
+              <AuditForm />
+            </motion.div>
+
+            {/* Benefits sidebar — takes 2 columns */}
+            <motion.div
+              initial="hidden" whileInView="visible" viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.15 }} variants={fadeUp}
+              className="lg:col-span-2"
+            >
+              <div className="sticky top-8">
+                <h3 className="text-lg sm:text-xl font-semibold mb-6">What You&apos;ll Get:</h3>
+                <ul className="space-y-4 mb-8">
+                  {auditBenefits.map((benefit, i) => (
+                    <motion.li
+                      key={i}
+                      initial="hidden" whileInView="visible" viewport={{ once: true }}
+                      transition={{ duration: 0.4, delay: 0.2 + i * 0.08 }}
+                      variants={fadeUp}
+                      className="flex items-start gap-3"
+                    >
+                      <div className="w-6 h-6 rounded-full bg-orange-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <svg className="w-3.5 h-3.5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <span className="text-sm sm:text-base text-gray-300">{benefit}</span>
+                    </motion.li>
                   ))}
                 </ul>
-                <CTAButton
-                  text={plan.cta}
-                  variant={plan.featured ? 'primary' : 'secondary'}
-                />
-              </motion.div>
-            ))}
+
+                {/* Social proof mini */}
+                <div className="rounded-2xl p-5 sm:p-6 bg-white/[0.02] border border-white/5">
+                  <div className="flex items-center gap-1 mb-3">
+                    {[...Array(5)].map((_, j) => (
+                      <svg key={j} className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                    ))}
+                  </div>
+                  <p className="text-sm text-gray-300 leading-relaxed mb-3">
+                    &ldquo;The audit alone was worth more than what other agencies charged us for a full consultation. Incredible value.&rdquo;
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500/20 to-red-500/10 flex items-center justify-center border border-orange-500/10">
+                      <span className="text-[10px] font-medium text-orange-400/80">LT</span>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium">Lisa Tran</p>
+                      <p className="text-[10px] text-gray-500">Founder, Luma Beauty</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
           </div>
         </div>
-      </Section>
+      </section>
 
       {/* ================================================================
        * 15. WHO IT'S FOR — Visual comparison
@@ -1380,12 +1561,9 @@ export function FunnelContent() {
       </section>
 
       {/* ================================================================
-       * FINAL CTA — Book a Call
-       *
-       * TODO: Replace href="#book" with your Calendly URL:
-       * href="https://calendly.com/your-username/15min"
+       * FINAL CTA — Get Your Free Audit
        * ================================================================ */}
-      <section id="book" className="py-20 sm:py-28 lg:py-36 px-5 sm:px-6">
+      <section className="py-20 sm:py-28 lg:py-36 px-5 sm:px-6">
         <Section>
           <div className="max-w-3xl mx-auto text-center">
             <div className="relative overflow-hidden rounded-2xl sm:rounded-[2.5rem] p-10 sm:p-14 md:p-20 border border-orange-500/10">
@@ -1410,14 +1588,14 @@ export function FunnelContent() {
                   Your Brand Deserves Better
                 </h2>
                 <p className="text-gray-400 text-base sm:text-lg max-w-lg mx-auto mb-10">
-                  Book a free 15-minute discovery call. No pressure, no commitment — just a real conversation about your goals.
+                  Get a free, personalized audit of your digital presence. No commitment — just actionable insights you can use right away.
                 </p>
 
-                <CTAButton text="Book Your Free 15-Min Call" />
+                <CTAButton text="Get Your Free Audit Now" />
 
                 <p className="text-xs text-gray-600 mt-6 flex items-center justify-center gap-2">
                   <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                  No sales pitch. Just a real conversation.
+                  Takes 60 seconds. Delivered to your inbox within 24 hours.
                 </p>
               </div>
             </div>
