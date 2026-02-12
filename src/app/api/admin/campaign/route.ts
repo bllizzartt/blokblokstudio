@@ -34,7 +34,6 @@ export async function POST(req: NextRequest) {
 
   // Determine status based on scheduling
   const isScheduled = scheduledAt && new Date(scheduledAt) > new Date();
-  const status = isScheduled ? 'scheduled' : (leads.length <= 5 ? 'sending' : 'queued');
 
   // Create campaign record
   const campaign = await prisma.emailCampaign.create({
@@ -44,49 +43,47 @@ export async function POST(req: NextRequest) {
       totalLeads: leads.length,
       leadIds: leadIds ? JSON.stringify(leadIds) : null,
       scheduledAt: isScheduled ? new Date(scheduledAt) : null,
-      status,
+      status: isScheduled ? 'scheduled' : 'sending',
     },
   });
 
-  // For small batches, send inline (fast). For large batches, let cron handle it.
-  if (status === 'sending') {
-    let sentCount = 0;
-    for (const lead of leads) {
-      const html = buildEmailHtml(body, lead);
-      const personalizedSubject = personalizeText(subject, lead);
-      const ok = await sendCampaignEmail({ to: lead.email, subject: personalizedSubject, html, leadId: lead.id });
-      if (ok) {
-        sentCount++;
-        await prisma.lead.update({
-          where: { id: lead.id },
-          data: { emailsSent: { increment: 1 }, lastEmailAt: new Date() },
-        });
-      }
-    }
-
-    await prisma.emailCampaign.update({
-      where: { id: campaign.id },
-      data: { sentTo: sentCount, sentAt: new Date(), status: 'sent' },
-    });
-
+  // Scheduled campaigns — daily cron picks them up at 8am UTC
+  if (isScheduled) {
     return NextResponse.json({
       success: true,
       campaignId: campaign.id,
-      sentTo: sentCount,
+      sentTo: 0,
       total: leads.length,
+      status: 'scheduled',
+      message: `Campaign scheduled for ${new Date(scheduledAt).toLocaleString()}`,
     });
   }
 
-  // Queued or scheduled — cron will pick it up
+  // Send immediately (all sizes)
+  let sentCount = 0;
+  for (const lead of leads) {
+    const html = buildEmailHtml(body, lead);
+    const personalizedSubject = personalizeText(subject, lead);
+    const ok = await sendCampaignEmail({ to: lead.email, subject: personalizedSubject, html, leadId: lead.id });
+    if (ok) {
+      sentCount++;
+      await prisma.lead.update({
+        where: { id: lead.id },
+        data: { emailsSent: { increment: 1 }, lastEmailAt: new Date() },
+      });
+    }
+  }
+
+  await prisma.emailCampaign.update({
+    where: { id: campaign.id },
+    data: { sentTo: sentCount, sentAt: new Date(), status: 'sent' },
+  });
+
   return NextResponse.json({
     success: true,
     campaignId: campaign.id,
-    sentTo: 0,
+    sentTo: sentCount,
     total: leads.length,
-    status,
-    message: isScheduled
-      ? `Campaign scheduled for ${new Date(scheduledAt).toLocaleString()}`
-      : `Campaign queued — ${leads.length} leads will be processed shortly`,
   });
 }
 
