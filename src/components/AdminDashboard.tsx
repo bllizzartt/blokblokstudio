@@ -44,8 +44,24 @@ interface SavedTemplate {
   updatedAt: string;
 }
 
-type Tab = 'dashboard' | 'leads' | 'compose' | 'templates' | 'history' | 'accounts' | 'sequences' | 'warmup';
+type Tab = 'dashboard' | 'leads' | 'compose' | 'templates' | 'history' | 'accounts' | 'sequences' | 'warmup' | 'analytics';
 type SendTarget = 'all' | 'selected' | 'individual';
+
+interface EmailEvent {
+  id: string;
+  leadId: string;
+  campaignId: string | null;
+  accountId: string | null;
+  type: string;
+  details: string | null;
+  createdAt: string;
+}
+
+interface ABVariant {
+  subject: string;
+  body: string;
+  weight: number;
+}
 
 interface AccountStat {
   id: string;
@@ -376,6 +392,25 @@ export function AdminDashboard() {
   const [newSeqName, setNewSeqName] = useState('');
   const [newSeqSteps, setNewSeqSteps] = useState([{ subject: '', body: '', delayDays: 0 }]);
 
+  // A/B Testing
+  const [abEnabled, setAbEnabled] = useState(false);
+  const [abVariants, setAbVariants] = useState<ABVariant[]>([
+    { subject: '', body: '', weight: 50 },
+    { subject: '', body: '', weight: 50 },
+  ]);
+
+  // Tags
+  const [newTagInput, setNewTagInput] = useState<Record<string, string>>({});
+
+  // Analytics / Events
+  const [events, setEvents] = useState<EmailEvent[]>([]);
+  const [eventsSummary, setEventsSummary] = useState<Record<string, number>>({});
+  const [eventsTotal, setEventsTotal] = useState(0);
+  const [eventsPage, setEventsPage] = useState(1);
+  const [eventsTotalPages, setEventsTotalPages] = useState(1);
+  const [eventsFilter, setEventsFilter] = useState('all');
+  const [eventsLeadFilter, setEventsLeadFilter] = useState('');
+
   // Sidebar collapsed on mobile
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -445,6 +480,23 @@ export function AdminDashboard() {
     } catch { /* silently fail */ }
   }, [headers]);
 
+  const fetchEvents = useCallback(async (page = 1, type = 'all', leadId = '') => {
+    try {
+      const params = new URLSearchParams({ page: String(page), limit: '50' });
+      if (type !== 'all') params.set('type', type);
+      if (leadId) params.set('leadId', leadId);
+      const res = await fetch(`/api/admin/events?${params}`, { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        setEvents(data.events);
+        setEventsSummary(data.summary || {});
+        setEventsTotal(data.total);
+        setEventsPage(data.page);
+        setEventsTotalPages(data.totalPages);
+      }
+    } catch { /* silently fail */ }
+  }, [headers]);
+
   const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const pw = password;
@@ -461,6 +513,7 @@ export function AdminDashboard() {
       fetchAccounts();
       fetchSequences();
       fetchTemplates();
+      fetchEvents();
     } else {
       localStorage.removeItem('bb_admin_pw');
       if (e) showToast('error', 'Wrong password');
@@ -482,8 +535,9 @@ export function AdminDashboard() {
       fetchAccounts();
       fetchSequences();
       fetchTemplates();
+      fetchEvents();
     }
-  }, [authed, fetchLeads, fetchCampaigns, fetchAccounts, fetchSequences, fetchTemplates]);
+  }, [authed, fetchLeads, fetchCampaigns, fetchAccounts, fetchSequences, fetchTemplates, fetchEvents]);
 
   // ── Derived data ──
   const activeLeads = leads.filter(l => !l.unsubscribed);
@@ -672,6 +726,12 @@ export function AdminDashboard() {
       const payload: Record<string, unknown> = { subject, body, leadIds };
       if (scheduleEnabled && scheduledAt) {
         payload.scheduledAt = new Date(scheduledAt).toISOString();
+      }
+      if (abEnabled) {
+        const validVariants = abVariants.filter(v => v.subject && v.body);
+        if (validVariants.length >= 2) {
+          payload.variants = JSON.stringify(validVariants);
+        }
       }
 
       const res = await fetch('/api/admin/campaign', {
@@ -918,6 +978,7 @@ export function AdminDashboard() {
     { id: 'sequences', label: 'Sequences', icon: <IconHistory /> },
     { id: 'accounts', label: 'Accounts', icon: <IconMail />, badge: accounts.length },
     { id: 'warmup', label: 'Warmup', icon: <IconVideo /> },
+    { id: 'analytics', label: 'Analytics', icon: <IconEye />, badge: eventsTotal },
     { id: 'history', label: 'History', icon: <IconHistory />, badge: campaigns.length },
   ];
 
@@ -1047,6 +1108,54 @@ export function AdminDashboard() {
                   </div>
                 ))}
               </div>
+
+              {/* Lead Pipeline */}
+              <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-6">
+                <h3 className="font-semibold mb-4">Lead Pipeline</h3>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                  {[
+                    { status: 'new', label: 'New', color: 'bg-gray-500' },
+                    { status: 'contacted', label: 'Contacted', color: 'bg-blue-500' },
+                    { status: 'replied', label: 'Replied', color: 'bg-purple-500' },
+                    { status: 'interested', label: 'Interested', color: 'bg-green-500' },
+                    { status: 'booked', label: 'Booked', color: 'bg-emerald-500' },
+                    { status: 'not_interested', label: 'Not Int.', color: 'bg-yellow-500' },
+                  ].map(s => {
+                    const count = leads.filter(l => (l.status || 'new') === s.status).length;
+                    return (
+                      <button
+                        key={s.status}
+                        onClick={() => { setFilterStatus(s.status); setTab('leads'); }}
+                        className="rounded-xl bg-white/[0.02] border border-white/5 p-3 text-center hover:border-white/10 transition-all"
+                      >
+                        <div className={`w-2 h-2 rounded-full ${s.color} mx-auto mb-2`} />
+                        <p className="text-lg font-bold text-gray-200">{count}</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">{s.label}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Email Performance */}
+              {(eventsSummary.sent || 0) > 0 && (
+                <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-6">
+                  <h3 className="font-semibold mb-4">Email Performance</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    {[
+                      { label: 'Bounce Rate', value: ((eventsSummary.bounced || 0) / (eventsSummary.sent || 1) * 100).toFixed(1) + '%', color: (eventsSummary.bounced || 0) / (eventsSummary.sent || 1) > 0.05 ? 'text-red-400' : 'text-green-400' },
+                      { label: 'Open Rate', value: ((eventsSummary.opened || 0) / (eventsSummary.sent || 1) * 100).toFixed(1) + '%', color: 'text-blue-400' },
+                      { label: 'Click Rate', value: ((eventsSummary.clicked || 0) / (eventsSummary.sent || 1) * 100).toFixed(1) + '%', color: 'text-purple-400' },
+                      { label: 'Reply Rate', value: ((eventsSummary.replied || 0) / (eventsSummary.sent || 1) * 100).toFixed(1) + '%', color: 'text-orange-400' },
+                    ].map(r => (
+                      <div key={r.label} className="text-center p-3 rounded-xl bg-white/[0.02]">
+                        <p className={`text-2xl font-bold ${r.color}`}>{r.value}</p>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">{r.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Industries breakdown */}
               <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-6">
@@ -1336,6 +1445,9 @@ export function AdminDashboard() {
                             {lead.bounceCount > 0 && (
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">{lead.bounceCount} bounce{lead.bounceCount > 1 ? 's' : ''}</span>
                             )}
+                            {lead.tags && (() => { try { const t: string[] = JSON.parse(lead.tags); return t.slice(0, 3).map((tag: string) => (
+                              <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400">{tag}</span>
+                            )); } catch { return null; } })()}
                             {lead.unsubscribed && (
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">Unsubscribed</span>
                             )}
@@ -1404,6 +1516,93 @@ export function AdminDashboard() {
                             <div className="sm:col-span-2">
                               <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Source</p>
                               <p className="text-gray-300">Funnel &middot; {new Date(lead.createdAt).toLocaleString()}</p>
+                            </div>
+
+                            {/* Tags management */}
+                            <div className="sm:col-span-2">
+                              <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Tags</p>
+                              <div className="flex items-center flex-wrap gap-2">
+                                {(() => {
+                                  const tags: string[] = lead.tags ? (() => { try { return JSON.parse(lead.tags); } catch { return []; } })() : [];
+                                  return tags.map((tag: string) => (
+                                    <span key={tag} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/10 text-orange-400 text-xs">
+                                      {tag}
+                                      <button
+                                        onClick={async () => {
+                                          await fetch('/api/admin/leads', {
+                                            method: 'PATCH',
+                                            headers: headers(),
+                                            body: JSON.stringify({ id: lead.id, action: 'removeTag', tags: tag }),
+                                          });
+                                          fetchLeads();
+                                        }}
+                                        className="hover:text-red-400 transition-colors"
+                                      >
+                                        <IconX />
+                                      </button>
+                                    </span>
+                                  ));
+                                })()}
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="text"
+                                    placeholder="Add tag..."
+                                    value={newTagInput[lead.id] || ''}
+                                    onChange={e => setNewTagInput(prev => ({ ...prev, [lead.id]: e.target.value }))}
+                                    onKeyDown={async (e) => {
+                                      if (e.key === 'Enter' && newTagInput[lead.id]?.trim()) {
+                                        await fetch('/api/admin/leads', {
+                                          method: 'PATCH',
+                                          headers: headers(),
+                                          body: JSON.stringify({ id: lead.id, action: 'addTag', tags: newTagInput[lead.id].trim() }),
+                                        });
+                                        setNewTagInput(prev => ({ ...prev, [lead.id]: '' }));
+                                        fetchLeads();
+                                      }
+                                    }}
+                                    className="bg-white/[0.03] border border-white/5 rounded-lg px-2.5 py-1 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30 w-28"
+                                  />
+                                  <button
+                                    onClick={async () => {
+                                      if (!newTagInput[lead.id]?.trim()) return;
+                                      await fetch('/api/admin/leads', {
+                                        method: 'PATCH',
+                                        headers: headers(),
+                                        body: JSON.stringify({ id: lead.id, action: 'addTag', tags: newTagInput[lead.id].trim() }),
+                                      });
+                                      setNewTagInput(prev => ({ ...prev, [lead.id]: '' }));
+                                      fetchLeads();
+                                    }}
+                                    className="px-2 py-1 rounded-lg text-xs bg-orange-500/10 text-orange-400 hover:bg-orange-500/20"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Status selector */}
+                            <div className="sm:col-span-2">
+                              <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Status</p>
+                              <select
+                                value={lead.status || 'new'}
+                                onChange={async (e) => {
+                                  await fetch('/api/admin/leads', {
+                                    method: 'PATCH',
+                                    headers: headers(),
+                                    body: JSON.stringify({ id: lead.id, status: e.target.value }),
+                                  });
+                                  fetchLeads();
+                                }}
+                                className="appearance-none bg-white/[0.03] border border-white/5 rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-orange-500/30 cursor-pointer"
+                              >
+                                <option value="new">New</option>
+                                <option value="contacted">Contacted</option>
+                                <option value="replied">Replied</option>
+                                <option value="interested">Interested</option>
+                                <option value="booked">Booked</option>
+                                <option value="not_interested">Not Interested</option>
+                              </select>
                             </div>
                           </div>
                         </div>
@@ -1596,6 +1795,45 @@ export function AdminDashboard() {
                       Video
                     </button>
 
+                    <div className="w-px h-5 bg-white/10 mx-1" />
+
+                    {/* Spintax helper */}
+                    <div className="relative group">
+                      <button
+                        type="button"
+                        onClick={() => insertAtCursor('{Hello|Hi|Hey}')}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 transition-colors"
+                        title="Insert spintax — randomizes text per email to avoid spam filters"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.745 3A23.933 23.933 0 003 12c0 3.183.62 6.22 1.745 9M19.5 3c.967 2.78 1.5 5.817 1.5 9s-.533 6.22-1.5 9M8.25 8.885l1.444-.89a.75.75 0 011.105.402l2.402 7.206a.75.75 0 001.105.401l1.444-.889" /></svg>
+                        Spintax
+                      </button>
+                      <div className="hidden group-hover:block absolute top-full left-0 mt-1 w-72 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl z-30 p-4">
+                        <p className="text-xs font-medium text-purple-400 mb-2">Spintax Syntax</p>
+                        <p className="text-[11px] text-gray-400 mb-3">
+                          Use {'{option1|option2|option3}'} to randomize text per recipient. Helps avoid spam filters by making each email unique.
+                        </p>
+                        <div className="space-y-1.5">
+                          {[
+                            { label: 'Greeting', value: '{Hello|Hi|Hey|Howdy}' },
+                            { label: 'CTA', value: '{Let me know|Drop me a reply|Just hit reply}' },
+                            { label: 'Opener', value: '{I noticed|I saw|I came across}' },
+                            { label: 'Closing', value: '{Best|Cheers|Talk soon|All the best}' },
+                          ].map(s => (
+                            <button
+                              key={s.label}
+                              type="button"
+                              onClick={() => insertAtCursor(s.value)}
+                              className="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] hover:bg-purple-500/10 text-gray-300 hover:text-purple-300 transition-colors"
+                            >
+                              <span className="text-purple-400 font-medium">{s.label}:</span>{' '}
+                              <span className="font-mono text-gray-500">{s.value}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="flex-1" />
 
                     {/* Preview toggle */}
@@ -1643,6 +1881,96 @@ export function AdminDashboard() {
                       onChange={e => setBody(e.target.value)}
                       className="w-full bg-white/[0.03] border border-white/5 border-t-0 rounded-b-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30 font-mono text-sm resize-y min-h-[300px] transition-all"
                     />
+                  )}
+                </div>
+
+                {/* A/B Testing */}
+                <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-sm font-medium text-gray-300">A/B Testing</label>
+                      <p className="text-xs text-gray-500 mt-0.5">Test different subject lines and bodies — the system picks a variant per recipient based on weight</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAbEnabled(!abEnabled)}
+                      className={`relative w-11 h-6 rounded-full transition-colors ${
+                        abEnabled ? 'bg-purple-500' : 'bg-white/10'
+                      }`}
+                    >
+                      <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                        abEnabled ? 'translate-x-[22px]' : 'translate-x-0.5'
+                      }`} />
+                    </button>
+                  </div>
+                  {abEnabled && (
+                    <div className="mt-4 space-y-4">
+                      <p className="text-[11px] text-gray-500">
+                        The main subject/body above becomes Variant A. Add more variants below. Weights control how often each variant is selected (higher = more frequent).
+                      </p>
+                      {abVariants.map((v, i) => (
+                        <div key={i} className="rounded-xl bg-white/[0.03] border border-white/5 p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-purple-400">Variant {String.fromCharCode(65 + i)}</span>
+                            <div className="flex items-center gap-3">
+                              <label className="text-xs text-gray-500">Weight:</label>
+                              <input
+                                type="range"
+                                min="1"
+                                max="100"
+                                value={v.weight}
+                                onChange={e => {
+                                  const updated = [...abVariants];
+                                  updated[i].weight = parseInt(e.target.value);
+                                  setAbVariants(updated);
+                                }}
+                                className="w-20 accent-purple-500"
+                              />
+                              <span className="text-xs text-gray-400 w-8">{v.weight}%</span>
+                              {abVariants.length > 2 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setAbVariants(vs => vs.filter((_, j) => j !== i))}
+                                  className="p-1 text-gray-500 hover:text-red-400"
+                                >
+                                  <IconX />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <input
+                            placeholder={`Subject line for variant ${String.fromCharCode(65 + i)}`}
+                            value={v.subject}
+                            onChange={e => {
+                              const updated = [...abVariants];
+                              updated[i].subject = e.target.value;
+                              setAbVariants(updated);
+                            }}
+                            className="w-full bg-white/[0.02] border border-white/5 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/30"
+                          />
+                          <textarea
+                            placeholder={`Email body for variant ${String.fromCharCode(65 + i)} (HTML)`}
+                            rows={4}
+                            value={v.body}
+                            onChange={e => {
+                              const updated = [...abVariants];
+                              updated[i].body = e.target.value;
+                              setAbVariants(updated);
+                            }}
+                            className="w-full bg-white/[0.02] border border-white/5 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/30 font-mono resize-y"
+                          />
+                        </div>
+                      ))}
+                      {abVariants.length < 5 && (
+                        <button
+                          type="button"
+                          onClick={() => setAbVariants(vs => [...vs, { subject: '', body: '', weight: 50 }])}
+                          className="w-full py-2.5 rounded-xl border border-dashed border-purple-500/20 text-sm text-purple-400/60 hover:text-purple-400 hover:border-purple-500/40 transition-colors"
+                        >
+                          + Add Variant (up to 5)
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -2570,6 +2898,188 @@ export function AdminDashboard() {
                       <button onClick={() => setShowCreateSeq(false)} className="px-6 py-3 rounded-xl bg-white/[0.03] border border-white/5 text-gray-400">Cancel</button>
                     </div>
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── ANALYTICS TAB ── */}
+          {tab === 'analytics' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">Email Analytics</h2>
+                  <p className="text-sm text-gray-500 mt-1">Track every email event across your campaigns</p>
+                </div>
+                <button
+                  onClick={() => fetchEvents(1, eventsFilter, eventsLeadFilter)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.03] border border-white/5 text-sm text-gray-400 hover:text-white"
+                >
+                  <IconRefresh />
+                  Refresh
+                </button>
+              </div>
+
+              {/* Summary cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                {[
+                  { type: 'sent', label: 'Sent', color: 'from-blue-500 to-cyan-500' },
+                  { type: 'bounced', label: 'Bounced', color: 'from-red-500 to-orange-500' },
+                  { type: 'opened', label: 'Opened', color: 'from-green-500 to-emerald-500' },
+                  { type: 'clicked', label: 'Clicked', color: 'from-purple-500 to-pink-500' },
+                  { type: 'replied', label: 'Replied', color: 'from-orange-500 to-yellow-500' },
+                  { type: 'unsubscribed', label: 'Unsubscribed', color: 'from-gray-500 to-gray-400' },
+                ].map(s => (
+                  <div key={s.type} className="rounded-xl bg-white/[0.02] border border-white/5 p-4">
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">{s.label}</p>
+                    <p className={`text-2xl font-bold bg-gradient-to-r ${s.color} bg-clip-text text-transparent`}>
+                      {eventsSummary[s.type] || 0}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Rates */}
+              {(eventsSummary.sent || 0) > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Bounce Rate', value: ((eventsSummary.bounced || 0) / (eventsSummary.sent || 1) * 100).toFixed(1) + '%', bad: ((eventsSummary.bounced || 0) / (eventsSummary.sent || 1)) > 0.05 },
+                    { label: 'Open Rate', value: ((eventsSummary.opened || 0) / (eventsSummary.sent || 1) * 100).toFixed(1) + '%', bad: false },
+                    { label: 'Click Rate', value: ((eventsSummary.clicked || 0) / (eventsSummary.sent || 1) * 100).toFixed(1) + '%', bad: false },
+                    { label: 'Reply Rate', value: ((eventsSummary.replied || 0) / (eventsSummary.sent || 1) * 100).toFixed(1) + '%', bad: false },
+                  ].map(r => (
+                    <div key={r.label} className="rounded-xl bg-white/[0.02] border border-white/5 p-4 text-center">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">{r.label}</p>
+                      <p className={`text-lg font-bold ${r.bad ? 'text-red-400' : 'text-gray-200'}`}>{r.value}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Filters */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <select
+                  value={eventsFilter}
+                  onChange={e => { setEventsFilter(e.target.value); fetchEvents(1, e.target.value, eventsLeadFilter); }}
+                  className="appearance-none bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-orange-500/30 cursor-pointer"
+                >
+                  <option value="all">All Events</option>
+                  <option value="sent">Sent</option>
+                  <option value="bounced">Bounced</option>
+                  <option value="opened">Opened</option>
+                  <option value="clicked">Clicked</option>
+                  <option value="replied">Replied</option>
+                  <option value="unsubscribed">Unsubscribed</option>
+                </select>
+                <div className="flex-1 relative">
+                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500">
+                    <IconSearch />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Filter by lead email..."
+                    value={eventsLeadFilter}
+                    onChange={e => setEventsLeadFilter(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        const lead = leads.find(l => l.email.toLowerCase().includes(eventsLeadFilter.toLowerCase()));
+                        fetchEvents(1, eventsFilter, lead?.id || '');
+                      }
+                    }}
+                    className="w-full bg-white/[0.03] border border-white/5 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30"
+                  />
+                </div>
+              </div>
+
+              {/* Events table */}
+              {events.length === 0 ? (
+                <div className="text-center py-16 rounded-2xl bg-white/[0.02] border border-white/5">
+                  <div className="w-16 h-16 rounded-full bg-orange-500/10 mx-auto mb-4 flex items-center justify-center">
+                    <IconEye />
+                  </div>
+                  <p className="text-gray-300 font-medium mb-2">No events recorded yet</p>
+                  <p className="text-xs text-gray-500 max-w-md mx-auto">
+                    Email events will appear here as campaigns are sent. Track sends, bounces, opens, clicks, and replies.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-white/[0.03] border-b border-white/5">
+                          <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium uppercase tracking-wider">Type</th>
+                          <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium uppercase tracking-wider">Lead</th>
+                          <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium uppercase tracking-wider">Details</th>
+                          <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium uppercase tracking-wider">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {events.map(ev => {
+                          const lead = leads.find(l => l.id === ev.leadId);
+                          return (
+                            <tr key={ev.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                              <td className="px-4 py-3">
+                                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                                  ev.type === 'sent' ? 'bg-blue-500/10 text-blue-400' :
+                                  ev.type === 'bounced' ? 'bg-red-500/10 text-red-400' :
+                                  ev.type === 'opened' ? 'bg-green-500/10 text-green-400' :
+                                  ev.type === 'clicked' ? 'bg-purple-500/10 text-purple-400' :
+                                  ev.type === 'replied' ? 'bg-orange-500/10 text-orange-400' :
+                                  ev.type === 'unsubscribed' ? 'bg-gray-500/10 text-gray-400' :
+                                  'bg-white/5 text-gray-400'
+                                }`}>
+                                  {ev.type}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                {lead ? (
+                                  <div>
+                                    <p className="text-sm text-gray-200">{lead.name}</p>
+                                    <p className="text-xs text-gray-500">{lead.email}</p>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-gray-500 font-mono">{ev.leadId.slice(0, 12)}...</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="text-xs text-gray-400">{ev.details || '—'}</span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="text-xs text-gray-500">{new Date(ev.createdAt).toLocaleString()}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Pagination */}
+                  {eventsTotalPages > 1 && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-white/5">
+                      <p className="text-xs text-gray-500">
+                        Showing {(eventsPage - 1) * 50 + 1}-{Math.min(eventsPage * 50, eventsTotal)} of {eventsTotal} events
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => { const p = eventsPage - 1; if (p >= 1) { setEventsPage(p); fetchEvents(p, eventsFilter, eventsLeadFilter); } }}
+                          disabled={eventsPage <= 1}
+                          className="px-3 py-1.5 rounded-lg text-xs bg-white/[0.03] border border-white/5 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          Previous
+                        </button>
+                        <span className="text-xs text-gray-500">Page {eventsPage} of {eventsTotalPages}</span>
+                        <button
+                          onClick={() => { const p = eventsPage + 1; if (p <= eventsTotalPages) { setEventsPage(p); fetchEvents(p, eventsFilter, eventsLeadFilter); } }}
+                          disabled={eventsPage >= eventsTotalPages}
+                          className="px-3 py-1.5 rounded-lg text-xs bg-white/[0.03] border border-white/5 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

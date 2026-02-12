@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   const authError = checkAdmin(req);
   if (authError) return authError;
 
-  const { subject, body, leadIds, scheduledAt } = await req.json();
+  const { subject, body, leadIds, scheduledAt, variants } = await req.json();
 
   if (!subject || !body) {
     return NextResponse.json({ error: 'Missing subject or body' }, { status: 400 });
@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
       leadIds: leadIds ? JSON.stringify(leadIds) : null,
       scheduledAt: isScheduled ? new Date(scheduledAt) : null,
       status: isScheduled ? 'scheduled' : 'sending',
+      variants: variants || null,
     },
   });
 
