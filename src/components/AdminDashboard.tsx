@@ -266,6 +266,84 @@ export function AdminDashboard() {
   const [accounts, setAccounts] = useState<AccountStat[]>([]);
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [newAccount, setNewAccount] = useState({ email: '', smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', label: '' });
+  const [selectedProvider, setSelectedProvider] = useState('');
+  const [showSetupGuide, setShowSetupGuide] = useState(false);
+
+  const EMAIL_PROVIDERS: Record<string, { label: string; smtpHost: string; smtpPort: number; instructions: string[] }> = {
+    'google': {
+      label: 'Google Workspace / Gmail',
+      smtpHost: 'smtp.gmail.com',
+      smtpPort: 587,
+      instructions: [
+        'Go to myaccount.google.com and sign in',
+        'Click "Security" in the left sidebar',
+        'Make sure "2-Step Verification" is turned ON (required)',
+        'After enabling 2-Step Verification, go back to Security',
+        'Search for "App passwords" or scroll down to find it',
+        'Select "Mail" as the app, then "Other" and type "Blokblok"',
+        'Google will give you a 16-character password — copy it',
+        'Use your full email as the "Login Email" below',
+        'Paste that 16-character password as the "Email Password" below',
+      ],
+    },
+    'outlook': {
+      label: 'Outlook / Office 365 / Hotmail',
+      smtpHost: 'smtp-mail.outlook.com',
+      smtpPort: 587,
+      instructions: [
+        'Go to account.microsoft.com and sign in',
+        'Go to Security > Advanced security options',
+        'Turn on "Two-step verification" if not already on',
+        'Go back to Security and find "App passwords"',
+        'Click "Create a new app password"',
+        'Microsoft will show you a password — copy it',
+        'Use your full email as the "Login Email" below',
+        'Paste the app password as the "Email Password" below',
+      ],
+    },
+    'yahoo': {
+      label: 'Yahoo Mail',
+      smtpHost: 'smtp.mail.yahoo.com',
+      smtpPort: 587,
+      instructions: [
+        'Go to login.yahoo.com and sign in',
+        'Click your profile icon > Account Info > Account Security',
+        'Turn on "Two-step verification"',
+        'Scroll down and click "Generate app password"',
+        'Select "Other App" and type "Blokblok"',
+        'Yahoo will show you a password — copy it',
+        'Use your full Yahoo email as the "Login Email" below',
+        'Paste that password as the "Email Password" below',
+      ],
+    },
+    'zoho': {
+      label: 'Zoho Mail',
+      smtpHost: 'smtp.zoho.com',
+      smtpPort: 587,
+      instructions: [
+        'Go to accounts.zoho.com and sign in',
+        'Go to Security > App Passwords',
+        'Click "Generate New Password"',
+        'Name it "Blokblok" and click Generate',
+        'Copy the generated password',
+        'Use your full Zoho email as the "Login Email" below',
+        'Paste that password as the "Email Password" below',
+      ],
+    },
+    'custom': {
+      label: 'Other / Custom Domain',
+      smtpHost: '',
+      smtpPort: 587,
+      instructions: [
+        'Check your email hosting provider\'s documentation for their mail server settings',
+        'Look for "Outgoing Mail Server" or "SMTP Settings" in their help docs',
+        'Common hosting providers: GoDaddy, Namecheap, Hostinger, SiteGround',
+        'You\'ll need: server address, port number (usually 587), your email, and password',
+        'If your host requires SSL, use port 465 instead of 587',
+        'Contact your email hosting provider\'s support if you can\'t find these settings',
+      ],
+    },
+  };
 
   // Sequences
   const [sequences, setSequences] = useState<SequenceData[]>([]);
@@ -1554,25 +1632,142 @@ export function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-bold">Sending Accounts</h2>
-                  <p className="text-sm text-gray-500 mt-1">{accounts.length} SMTP accounts configured</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {accounts.length === 0 ? 'Connect your email accounts to start sending' : `${accounts.length} email account${accounts.length !== 1 ? 's' : ''} connected`}
+                  </p>
                 </div>
-                <button
-                  onClick={() => setShowAddAccount(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-medium"
-                >
-                  + Add Account
-                </button>
-              </div>
-
-              {accounts.length === 0 ? (
-                <div className="text-center py-16 rounded-2xl bg-white/[0.02] border border-white/5">
-                  <p className="text-gray-500 mb-2">No sending accounts yet</p>
-                  <p className="text-xs text-gray-600">Add your SMTP email accounts to enable multi-account rotation</p>
-                  <button onClick={() => setShowAddAccount(true)} className="mt-4 text-sm text-orange-400 hover:text-orange-300">
-                    Add your first account
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowSetupGuide(g => !g)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.03] border border-white/5 text-gray-400 text-sm hover:border-white/10 hover:text-gray-300 transition-colors"
+                  >
+                    ? Setup Guide
+                  </button>
+                  <button
+                    onClick={() => { setSelectedProvider(''); setShowAddAccount(true); }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-medium"
+                  >
+                    + Add Account
                   </button>
                 </div>
-              ) : (
+              </div>
+
+              {/* Setup guide panel */}
+              {showSetupGuide && (
+                <div className="rounded-2xl bg-white/[0.02] border border-orange-500/20 p-6 space-y-4">
+                  <div className="flex items-start justify-between">
+                    <h3 className="font-semibold text-orange-400">How This Works (Quick Guide)</h3>
+                    <button onClick={() => setShowSetupGuide(false)} className="text-gray-500 hover:text-gray-300">&times;</button>
+                  </div>
+
+                  <div className="space-y-4 text-sm text-gray-300">
+                    <div className="rounded-xl bg-white/[0.02] border border-white/5 p-4">
+                      <h4 className="font-medium text-white mb-2">What is this page for?</h4>
+                      <p className="text-gray-400 leading-relaxed">
+                        This is where you connect your email accounts so the system can send campaigns from them.
+                        Think of it like adding your email accounts to a mail app — you give us the login details, and we
+                        handle sending your campaigns automatically.
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-white/[0.02] border border-white/5 p-4">
+                      <h4 className="font-medium text-white mb-2">Why multiple accounts?</h4>
+                      <p className="text-gray-400 leading-relaxed">
+                        Sending too many emails from one account can trigger spam filters. By spreading sends across
+                        multiple accounts, each account sends fewer emails per day, which keeps your emails landing in
+                        inboxes instead of spam folders. The system automatically rotates between your accounts.
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-white/[0.02] border border-white/5 p-4">
+                      <h4 className="font-medium text-white mb-2">What is warmup?</h4>
+                      <p className="text-gray-400 leading-relaxed">
+                        New email accounts have no reputation yet. If you suddenly blast 100 emails, email providers like
+                        Gmail will flag you as spam. Warmup means starting slow (5 emails/day) and gradually increasing
+                        over weeks. The system handles this automatically — just add your accounts and it takes care of the rest.
+                      </p>
+                      <div className="mt-3 grid grid-cols-5 gap-2">
+                        {Object.entries(EMAIL_PROVIDERS).length > 0 && [
+                          { phase: 1, limit: 5, days: 'Day 1-7' },
+                          { phase: 2, limit: 15, days: 'Day 8-14' },
+                          { phase: 3, limit: 30, days: 'Day 15-28' },
+                          { phase: 4, limit: 50, days: 'Day 29-42' },
+                          { phase: 5, limit: 100, days: 'Day 43+' },
+                        ].map(p => (
+                          <div key={p.phase} className="text-center p-2 rounded-lg bg-white/[0.03]">
+                            <div className="text-orange-400 font-semibold">{p.limit}/day</div>
+                            <div className="text-[10px] text-gray-500 mt-0.5">{p.days}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl bg-white/[0.02] border border-white/5 p-4">
+                      <h4 className="font-medium text-white mb-2">What do I need to add an account?</h4>
+                      <p className="text-gray-400 leading-relaxed mb-3">
+                        You need 3 things from each email account you want to connect:
+                      </p>
+                      <div className="space-y-2">
+                        <div className="flex items-start gap-3">
+                          <span className="flex-none w-6 h-6 rounded-full bg-orange-500/10 text-orange-400 flex items-center justify-center text-xs font-bold">1</span>
+                          <div>
+                            <span className="text-white font-medium">Your email address</span>
+                            <p className="text-gray-500 text-xs mt-0.5">The full email like chase@blokblok.com</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <span className="flex-none w-6 h-6 rounded-full bg-orange-500/10 text-orange-400 flex items-center justify-center text-xs font-bold">2</span>
+                          <div>
+                            <span className="text-white font-medium">Your email provider</span>
+                            <p className="text-gray-500 text-xs mt-0.5">Google Workspace, Gmail, Outlook, etc. — we&apos;ll auto-fill the server settings</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <span className="flex-none w-6 h-6 rounded-full bg-orange-500/10 text-orange-400 flex items-center justify-center text-xs font-bold">3</span>
+                          <div>
+                            <span className="text-white font-medium">An app password</span>
+                            <p className="text-gray-500 text-xs mt-0.5">NOT your regular login password. This is a special password your email provider generates for apps. The setup wizard will show you exactly how to get one.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => { setShowSetupGuide(false); setSelectedProvider(''); setShowAddAccount(true); }}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold text-sm"
+                  >
+                    Got it — Add My First Account
+                  </button>
+                </div>
+              )}
+
+              {accounts.length === 0 && !showSetupGuide ? (
+                <div className="text-center py-16 rounded-2xl bg-white/[0.02] border border-white/5">
+                  <div className="w-16 h-16 rounded-full bg-orange-500/10 mx-auto mb-4 flex items-center justify-center">
+                    <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-orange-400"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                  </div>
+                  <p className="text-gray-300 font-medium mb-2">No email accounts connected yet</p>
+                  <p className="text-xs text-gray-500 max-w-md mx-auto leading-relaxed">
+                    Connect your email accounts here so the system can send campaigns from them.
+                    The system will automatically spread sends across your accounts and warm them up gradually.
+                  </p>
+                  <div className="flex flex-col items-center gap-2 mt-6">
+                    <button
+                      onClick={() => { setSelectedProvider(''); setShowAddAccount(true); }}
+                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-medium"
+                    >
+                      + Add Your First Account
+                    </button>
+                    <button
+                      onClick={() => setShowSetupGuide(true)}
+                      className="text-xs text-gray-500 hover:text-orange-400 transition-colors"
+                    >
+                      Not sure how? Read the setup guide first
+                    </button>
+                  </div>
+                </div>
+              ) : accounts.length > 0 && (
                 <div className="space-y-3">
                   {accounts.map(acc => (
                     <div key={acc.id} className="rounded-2xl bg-white/[0.02] border border-white/5 p-5">
@@ -1623,35 +1818,177 @@ export function AdminDashboard() {
                 </div>
               )}
 
-              {/* Add account modal */}
+              {/* Add account modal — guided setup */}
               {showAddAccount && (
                 <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowAddAccount(false)}>
-                  <div className="w-full max-w-md bg-[#161616] border border-white/10 rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-                    <h3 className="font-semibold mb-4">Add Sending Account</h3>
-                    <div className="space-y-3">
-                      <input placeholder="Label (e.g. Chase - Blokblok)" value={newAccount.label} onChange={e => setNewAccount(p => ({ ...p, label: e.target.value }))} className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30" />
-                      <input placeholder="Email address" value={newAccount.email} onChange={e => setNewAccount(p => ({ ...p, email: e.target.value }))} className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30" />
-                      <input placeholder="SMTP Host (e.g. smtp.gmail.com)" value={newAccount.smtpHost} onChange={e => setNewAccount(p => ({ ...p, smtpHost: e.target.value }))} className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30" />
-                      <input placeholder="SMTP Port (587)" type="number" value={newAccount.smtpPort} onChange={e => setNewAccount(p => ({ ...p, smtpPort: parseInt(e.target.value) || 587 }))} className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30" />
-                      <input placeholder="SMTP Username" value={newAccount.smtpUser} onChange={e => setNewAccount(p => ({ ...p, smtpUser: e.target.value }))} className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30" />
-                      <input placeholder="SMTP Password / App Password" type="password" value={newAccount.smtpPass} onChange={e => setNewAccount(p => ({ ...p, smtpPass: e.target.value }))} className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30" />
+                  <div className="w-full max-w-lg bg-[#161616] border border-white/10 rounded-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                    <h3 className="font-semibold text-lg mb-1">Add Email Account</h3>
+                    <p className="text-xs text-gray-500 mb-5">Connect an email account so we can send campaigns from it</p>
+
+                    <div className="space-y-5">
+                      {/* Step 1: Nickname */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1.5">Nickname</label>
+                        <p className="text-[11px] text-gray-500 mb-2">A friendly name so you can tell your accounts apart (e.g. &quot;Chase - Main&quot; or &quot;Marketing Account&quot;)</p>
+                        <input
+                          placeholder="e.g. Chase - Blokblok"
+                          value={newAccount.label}
+                          onChange={e => setNewAccount(p => ({ ...p, label: e.target.value }))}
+                          className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30"
+                        />
+                      </div>
+
+                      {/* Step 2: Email */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1.5">Email Address</label>
+                        <p className="text-[11px] text-gray-500 mb-2">The email address you want to send campaigns from</p>
+                        <input
+                          placeholder="e.g. chase@blokblok.com"
+                          type="email"
+                          value={newAccount.email}
+                          onChange={e => setNewAccount(p => ({ ...p, email: e.target.value }))}
+                          className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30"
+                        />
+                      </div>
+
+                      {/* Step 3: Provider */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1.5">Email Provider</label>
+                        <p className="text-[11px] text-gray-500 mb-2">Where is this email hosted? This auto-fills the server settings for you.</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {Object.entries(EMAIL_PROVIDERS).map(([key, provider]) => (
+                            <button
+                              key={key}
+                              onClick={() => {
+                                setSelectedProvider(key);
+                                if (provider.smtpHost) {
+                                  setNewAccount(p => ({ ...p, smtpHost: provider.smtpHost, smtpPort: provider.smtpPort }));
+                                }
+                              }}
+                              className={`p-3 rounded-xl border text-left text-sm transition-all ${
+                                selectedProvider === key
+                                  ? 'border-orange-500/50 bg-orange-500/10 text-orange-300'
+                                  : 'border-white/5 bg-white/[0.02] text-gray-400 hover:border-white/10'
+                              }`}
+                            >
+                              {provider.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Provider-specific instructions */}
+                      {selectedProvider && (
+                        <div className="rounded-xl bg-orange-500/5 border border-orange-500/15 p-4">
+                          <h4 className="text-sm font-medium text-orange-400 mb-3">
+                            How to get your app password {selectedProvider !== 'custom' ? `(${EMAIL_PROVIDERS[selectedProvider].label})` : ''}
+                          </h4>
+                          <ol className="space-y-2">
+                            {EMAIL_PROVIDERS[selectedProvider].instructions.map((step, i) => (
+                              <li key={i} className="flex items-start gap-2.5 text-xs text-gray-400">
+                                <span className="flex-none w-5 h-5 rounded-full bg-orange-500/15 text-orange-400 flex items-center justify-center text-[10px] font-bold mt-0.5">
+                                  {i + 1}
+                                </span>
+                                <span className="leading-relaxed">{step}</span>
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      )}
+
+                      {/* Step 4: Server settings (auto-filled or manual) */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1.5">Server Settings</label>
+                        {selectedProvider && selectedProvider !== 'custom' ? (
+                          <p className="text-[11px] text-green-400 mb-2">Auto-filled based on your email provider. You probably don&apos;t need to change these.</p>
+                        ) : (
+                          <p className="text-[11px] text-gray-500 mb-2">
+                            Your email provider&apos;s outgoing mail server. Look for &quot;Outgoing Server&quot; or &quot;SMTP&quot; in your email provider&apos;s settings/help page.
+                          </p>
+                        )}
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="col-span-2">
+                            <input
+                              placeholder="Mail server address"
+                              value={newAccount.smtpHost}
+                              onChange={e => setNewAccount(p => ({ ...p, smtpHost: e.target.value }))}
+                              className={`w-full bg-white/[0.03] border rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30 ${
+                                selectedProvider && selectedProvider !== 'custom' ? 'border-green-500/20' : 'border-white/5'
+                              }`}
+                            />
+                            <p className="text-[10px] text-gray-600 mt-1">Server address</p>
+                          </div>
+                          <div>
+                            <input
+                              placeholder="587"
+                              type="number"
+                              value={newAccount.smtpPort}
+                              onChange={e => setNewAccount(p => ({ ...p, smtpPort: parseInt(e.target.value) || 587 }))}
+                              className={`w-full bg-white/[0.03] border rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30 ${
+                                selectedProvider && selectedProvider !== 'custom' ? 'border-green-500/20' : 'border-white/5'
+                              }`}
+                            />
+                            <p className="text-[10px] text-gray-600 mt-1">Port (usually 587)</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Step 5: Login credentials */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1.5">Login Details</label>
+                        <p className="text-[11px] text-gray-500 mb-2">
+                          The username is usually your full email address. The password is the <strong className="text-orange-400">app password</strong> you generated above — NOT your regular email login password.
+                        </p>
+                        <div className="space-y-2">
+                          <div>
+                            <input
+                              placeholder="Login email (usually same as your email above)"
+                              value={newAccount.smtpUser}
+                              onChange={e => setNewAccount(p => ({ ...p, smtpUser: e.target.value }))}
+                              className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30"
+                            />
+                            <p className="text-[10px] text-gray-600 mt-1">Usually your full email address (e.g. chase@blokblok.com)</p>
+                          </div>
+                          <div>
+                            <input
+                              placeholder="App password (the one you just generated)"
+                              type="password"
+                              value={newAccount.smtpPass}
+                              onChange={e => setNewAccount(p => ({ ...p, smtpPass: e.target.value }))}
+                              className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30"
+                            />
+                            <p className="text-[10px] text-gray-600 mt-1">The 16-character app password — NOT your regular login password</p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex gap-2 mt-5">
+
+                    <div className="flex gap-2 mt-6">
                       <button
                         onClick={async () => {
-                          const res = await fetch('/api/admin/accounts', { method: 'POST', headers: headers(), body: JSON.stringify(newAccount) });
+                          if (!newAccount.email || !newAccount.smtpHost || !newAccount.smtpUser || !newAccount.smtpPass) {
+                            showToast('error', 'Please fill in all fields'); return;
+                          }
+                          const payload = { ...newAccount, label: newAccount.label || newAccount.email };
+                          const res = await fetch('/api/admin/accounts', { method: 'POST', headers: headers(), body: JSON.stringify(payload) });
                           const data = await res.json();
                           if (!res.ok) { showToast('error', data.error); return; }
-                          showToast('success', 'Account added!');
+                          showToast('success', 'Account connected successfully!');
                           setShowAddAccount(false);
+                          setSelectedProvider('');
                           setNewAccount({ email: '', smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', label: '' });
                           fetchAccounts();
                         }}
-                        className="flex-1 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold"
+                        className="flex-1 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold text-sm"
                       >
-                        Add Account
+                        Connect Account
                       </button>
-                      <button onClick={() => setShowAddAccount(false)} className="px-6 py-3 rounded-xl bg-white/[0.03] border border-white/5 text-gray-400">Cancel</button>
+                      <button
+                        onClick={() => { setShowAddAccount(false); setSelectedProvider(''); }}
+                        className="px-6 py-3 rounded-xl bg-white/[0.03] border border-white/5 text-gray-400 text-sm"
+                      >
+                        Cancel
+                      </button>
                     </div>
                   </div>
                 </div>
