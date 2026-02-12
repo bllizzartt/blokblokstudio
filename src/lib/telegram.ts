@@ -26,13 +26,13 @@ export async function notifyTelegram(lead: {
   }
 
   const message = [
-    '🔥 *New Lead from Funnel!*',
+    '🔥 New Lead from Funnel!',
     '',
-    `👤 *Name:* ${escapeMarkdown(lead.name)}`,
-    `📧 *Email:* ${escapeMarkdown(lead.email)}`,
-    `💼 *Industry:* ${escapeMarkdown(lead.field)}`,
-    `🌐 *Website:* ${lead.website ? escapeMarkdown(lead.website) : '_No website yet_'}`,
-    `❓ *Challenge:* ${escapeMarkdown(lead.problem)}`,
+    `👤 Name: ${lead.name}`,
+    `📧 Email: ${lead.email}`,
+    `💼 Industry: ${lead.field}`,
+    `🌐 Website: ${lead.website || 'No website yet'}`,
+    `❓ Challenge: ${lead.problem}`,
     '',
     `📅 ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })}`,
   ].join('\n');
@@ -46,7 +46,6 @@ export async function notifyTelegram(lead: {
         body: JSON.stringify({
           chat_id: chatId,
           text: message,
-          parse_mode: 'Markdown',
         }),
       }
     );
@@ -58,8 +57,4 @@ export async function notifyTelegram(lead: {
   } catch (err) {
     console.error('[Telegram] Error:', err);
   }
-}
-
-function escapeMarkdown(text: string): string {
-  return text.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
 }
