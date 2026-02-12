@@ -26,11 +26,14 @@ model Lead {
 }
 
 model EmailCampaign {
-  id        String   @id @default(cuid())
-  subject   String
-  body      String
-  sentTo    Int      @default(0)
-  sentAt    DateTime?
-  status    String   @default("draft")
-  createdAt DateTime @default(now())
+  id          String    @id @default(cuid())
+  subject     String
+  body        String
+  sentTo      Int       @default(0)
+  totalLeads  Int       @default(0)
+  sentAt      DateTime?
+  scheduledAt DateTime?
+  leadIds     String?   // JSON array of specific lead IDs, null = all active
+  status      String    @default("draft") // draft, queued, scheduled, sending, sent, failed
+  createdAt   DateTime  @default(now())
 }
