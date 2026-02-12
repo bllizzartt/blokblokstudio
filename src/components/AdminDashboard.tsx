@@ -18,6 +18,7 @@ interface Lead {
   tags: string | null;
   emailVerified: boolean;
   verifyResult: string | null;
+  verifiedAt: string | null;
   bounceCount: number;
   bounceType: string | null;
   createdAt: string;
@@ -680,7 +681,10 @@ export function AdminDashboard() {
     const matchVerify = filterVerify === 'all'
       || (filterVerify === 'verified' && l.emailVerified && l.verifyResult === 'valid')
       || (filterVerify === 'unverified' && !l.emailVerified)
-      || (filterVerify === 'invalid' && l.emailVerified && l.verifyResult !== 'valid');
+      || (filterVerify === 'invalid' && l.emailVerified && l.verifyResult === 'invalid')
+      || (filterVerify === 'risky' && l.emailVerified && l.verifyResult === 'risky')
+      || (filterVerify === 'catch_all' && l.emailVerified && l.verifyResult === 'catch_all')
+      || (filterVerify === 'disposable' && l.emailVerified && l.verifyResult === 'disposable');
     const matchList = filterList === 'all' || listMemberIds.has(l.id);
     return matchSearch && matchField && matchStatus && matchVerify && matchList;
   });
@@ -1502,9 +1506,12 @@ export function AdminDashboard() {
                   className="appearance-none bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 pr-10 text-sm text-gray-300 focus:outline-none focus:border-orange-500/30 transition-all cursor-pointer"
                 >
                   <option value="all">All Emails</option>
-                  <option value="verified">Verified</option>
-                  <option value="unverified">Unverified</option>
-                  <option value="invalid">Invalid/Risky</option>
+                  <option value="verified">SMTP Verified</option>
+                  <option value="unverified">Not Checked</option>
+                  <option value="invalid">Invalid (No Mailbox)</option>
+                  <option value="risky">Risky</option>
+                  <option value="catch_all">Catch-All</option>
+                  <option value="disposable">Disposable</option>
                 </select>
                 {leadLists.length > 0 && (
                   <select
@@ -1609,8 +1616,16 @@ export function AdminDashboard() {
                                 lead.verifyResult === 'invalid' ? 'bg-red-500/10 text-red-400' :
                                 lead.verifyResult === 'disposable' ? 'bg-red-500/10 text-red-400' :
                                 lead.verifyResult === 'catch_all' ? 'bg-yellow-500/10 text-yellow-400' :
+                                lead.verifyResult === 'risky' ? 'bg-amber-500/10 text-amber-400' :
                                 'bg-yellow-500/10 text-yellow-400'
-                              }`}>{lead.verifyResult === 'catch_all' ? 'catch-all' : lead.verifyResult}</span>
+                              }`}>
+                                {lead.verifyResult === 'valid' ? 'SMTP OK' :
+                                 lead.verifyResult === 'invalid' ? 'No Mailbox' :
+                                 lead.verifyResult === 'catch_all' ? 'Catch-All' :
+                                 lead.verifyResult === 'risky' ? 'Risky' :
+                                 lead.verifyResult === 'disposable' ? 'Disposable' :
+                                 lead.verifyResult}
+                              </span>
                             )}
                             {lead.bounceCount > 0 && (
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">{lead.bounceCount} bounce{lead.bounceCount > 1 ? 's' : ''}</span>
@@ -1697,6 +1712,90 @@ export function AdminDashboard() {
                                 <p className="text-xs text-gray-500 mt-0.5">Last: {new Date(lead.lastEmailAt).toLocaleString()}</p>
                               )}
                             </div>
+                            {/* SMTP Verification Details */}
+                            {lead.emailVerified && (
+                              <div className="sm:col-span-2">
+                                <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Email Verification</p>
+                                <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                                    lead.verifyResult === 'valid' ? 'bg-green-500/20 text-green-400' :
+                                    lead.verifyResult === 'invalid' ? 'bg-red-500/20 text-red-400' :
+                                    lead.verifyResult === 'disposable' ? 'bg-red-500/20 text-red-400' :
+                                    lead.verifyResult === 'catch_all' ? 'bg-yellow-500/20 text-yellow-400' :
+                                    lead.verifyResult === 'risky' ? 'bg-amber-500/20 text-amber-400' :
+                                    'bg-gray-500/20 text-gray-400'
+                                  }`}>
+                                    {lead.verifyResult === 'valid' ? (
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+                                    ) : lead.verifyResult === 'invalid' || lead.verifyResult === 'disposable' ? (
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                                    ) : (
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 9v4m0 4h.01M12 2a10 10 0 100 20 10 10 0 000-20z"/></svg>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className={`text-sm font-medium ${
+                                      lead.verifyResult === 'valid' ? 'text-green-400' :
+                                      lead.verifyResult === 'invalid' ? 'text-red-400' :
+                                      lead.verifyResult === 'disposable' ? 'text-red-400' :
+                                      lead.verifyResult === 'risky' ? 'text-amber-400' :
+                                      lead.verifyResult === 'catch_all' ? 'text-yellow-400' :
+                                      'text-gray-400'
+                                    }`}>
+                                      {lead.verifyResult === 'valid' ? 'SMTP Verified — Mailbox Exists' :
+                                       lead.verifyResult === 'invalid' ? 'Invalid — Mailbox Does Not Exist' :
+                                       lead.verifyResult === 'disposable' ? 'Disposable Email Provider' :
+                                       lead.verifyResult === 'catch_all' ? 'Catch-All Server — May Not Exist' :
+                                       lead.verifyResult === 'risky' ? 'Risky — Could Not Fully Verify' :
+                                       `Result: ${lead.verifyResult}`}
+                                    </p>
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-gray-400">Syntax OK</span>
+                                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                                        lead.verifyResult !== 'invalid' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
+                                      }`}>MX Records {lead.verifyResult !== 'invalid' ? 'Found' : 'Missing'}</span>
+                                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                                        lead.verifyResult === 'valid' ? 'bg-green-500/10 text-green-400' :
+                                        lead.verifyResult === 'invalid' ? 'bg-red-500/10 text-red-400' :
+                                        lead.verifyResult === 'risky' ? 'bg-amber-500/10 text-amber-400' :
+                                        'bg-yellow-500/10 text-yellow-400'
+                                      }`}>SMTP {
+                                        lead.verifyResult === 'valid' ? 'Passed' :
+                                        lead.verifyResult === 'invalid' ? 'Rejected' :
+                                        lead.verifyResult === 'risky' ? 'Blocked/Greylisted' :
+                                        lead.verifyResult === 'catch_all' ? 'Catch-All' :
+                                        'Skipped'
+                                      }</span>
+                                    </div>
+                                    {lead.verifiedAt && (
+                                      <p className="text-[11px] text-gray-600 mt-2">Verified: {new Date(lead.verifiedAt).toLocaleString()}</p>
+                                    )}
+                                  </div>
+                                  {/* Re-verify button */}
+                                  <button
+                                    onClick={async () => {
+                                      showToast('success', 'Re-verifying...');
+                                      const res = await fetch('/api/admin/verify', {
+                                        method: 'POST',
+                                        headers: headers(),
+                                        body: JSON.stringify({ leadIds: [lead.id] }),
+                                      });
+                                      const data = await res.json();
+                                      if (res.ok) {
+                                        showToast('success', data.message);
+                                        fetchLeads();
+                                      } else {
+                                        showToast('error', data.error);
+                                      }
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg text-xs bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors flex-shrink-0"
+                                  >
+                                    Re-verify
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
                             <div className="sm:col-span-2">
                               <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Challenge</p>
                               <p className="text-gray-300">{lead.problem}</p>
