@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
         });
         const enriched = leads.map(l => ({
           ...l, status: 'new', tags: null, emailVerified: false,
-          verifyResult: null, bounceCount: 0, bounceType: null,
+          verifyResult: null, verifiedAt: null, bounceCount: 0, bounceType: null,
           updatedAt: l.createdAt,
         }));
         return NextResponse.json({
