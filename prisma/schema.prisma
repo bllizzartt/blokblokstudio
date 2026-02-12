@@ -1,0 +1,40 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Lead {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  field     String   // industry / field of work
+  website   String?  // null if they don't have one
+  noWebsite Boolean  @default(false)
+  problem   String
+  source    String   @default("funnel") // where the lead came from
+
+  // Email campaign tracking
+  emailsSent   Int      @default(0)
+  lastEmailAt  DateTime?
+  unsubscribed Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EmailCampaign {
+  id        String   @id @default(cuid())
+  subject   String
+  body      String   // HTML body
+  sentTo    Int      @default(0) // number of recipients
+  sentAt    DateTime?
+  status    String   @default("draft") // draft | sending | sent
+  createdAt DateTime @default(now())
+}

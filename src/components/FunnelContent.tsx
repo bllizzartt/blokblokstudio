@@ -481,15 +481,31 @@ function AuditForm() {
   });
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    // TODO: Connect to your email service (Mailchimp, ConvertKit, Resend, etc.)
-    // Example: await fetch('/api/audit', { method: 'POST', body: JSON.stringify(formData) });
-    await new Promise((r) => setTimeout(r, 1500)); // Simulated delay
-    setSubmitted(true);
-    setSubmitting(false);
+    setError('');
+
+    try {
+      const res = await fetch('/api/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Something went wrong');
+      }
+
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -604,6 +620,15 @@ function AuditForm() {
           className={`${inputBase} resize-none`}
         />
       </div>
+
+      {error && (
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+          </svg>
+          {error}
+        </div>
+      )}
 
       <motion.button
         type="submit"
@@ -1348,9 +1373,7 @@ export function FunnelContent() {
 
       {/* ================================================================
        * 14. FREE AUDIT — Lead capture form
-       *
-       * TODO: Connect the form to your email service (Mailchimp,
-       * ConvertKit, Resend, etc.) in the AuditForm handleSubmit function.
+       * Connected to /api/audit → Prisma DB + Email + Telegram notifications
        * ================================================================ */}
       <section id="audit" className="py-20 sm:py-28 lg:py-36 px-5 sm:px-6 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-orange-500/[0.03] via-red-500/[0.015] to-transparent" />
