@@ -1,26 +1,22 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  output   = "../generated/prisma"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 model Lead {
   id        String   @id @default(cuid())
   name      String
   email     String   @unique
-  field     String   // industry / field of work
-  website   String?  // null if they don't have one
+  field     String
+  website   String?
   noWebsite Boolean  @default(false)
   problem   String
-  source    String   @default("funnel") // where the lead came from
+  source    String   @default("funnel")
 
-  // Email campaign tracking
   emailsSent   Int      @default(0)
   lastEmailAt  DateTime?
   unsubscribed Boolean  @default(false)
@@ -32,9 +28,9 @@ model Lead {
 model EmailCampaign {
   id        String   @id @default(cuid())
   subject   String
-  body      String   // HTML body
-  sentTo    Int      @default(0) // number of recipients
+  body      String
+  sentTo    Int      @default(0)
   sentAt    DateTime?
-  status    String   @default("draft") // draft | sending | sent
+  status    String   @default("draft")
   createdAt DateTime @default(now())
 }
