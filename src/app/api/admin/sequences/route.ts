@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     include: {
       steps: { orderBy: { order: 'asc' } },
       enrollments: {
-        select: { status: true },
+        select: { id: true, leadId: true, currentStep: true, status: true, nextSendAt: true },
       },
     },
     orderBy: { createdAt: 'desc' },
@@ -22,7 +22,6 @@ export async function GET(req: NextRequest) {
     enrolledCount: seq.enrollments.length,
     activeCount: seq.enrollments.filter(e => e.status === 'active').length,
     completedCount: seq.enrollments.filter(e => e.status === 'completed').length,
-    enrollments: undefined,
   }));
 
   return NextResponse.json({ sequences: result });

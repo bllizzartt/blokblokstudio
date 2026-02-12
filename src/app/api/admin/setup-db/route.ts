@@ -172,6 +172,35 @@ export async function POST(req: NextRequest) {
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "EmailEvent_type_idx" ON "EmailEvent"("type")`);
     results.push('EmailEvent table ready');
 
+    // Create LeadList table
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "LeadList" (
+        "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+        "name" TEXT NOT NULL,
+        "description" TEXT,
+        "color" TEXT NOT NULL DEFAULT '#f97316',
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "LeadList_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    results.push('LeadList table ready');
+
+    // Create LeadListMember table
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "LeadListMember" (
+        "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+        "listId" TEXT NOT NULL,
+        "leadId" TEXT NOT NULL,
+        "addedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "LeadListMember_pkey" PRIMARY KEY ("id"),
+        CONSTRAINT "LeadListMember_listId_fkey" FOREIGN KEY ("listId") REFERENCES "LeadList"("id") ON DELETE CASCADE ON UPDATE CASCADE
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "LeadListMember_listId_leadId_key" ON "LeadListMember"("listId", "leadId")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "LeadListMember_leadId_idx" ON "LeadListMember"("leadId")`);
+    results.push('LeadListMember table ready');
+
     return NextResponse.json({ success: true, results });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);

@@ -153,6 +153,16 @@ export async function GET(req: NextRequest) {
         data: { emailsSent: { increment: 1 }, lastEmailAt: new Date() },
       });
 
+      // Auto-set status to "contacted" on first email
+      if (lead.emailsSent === 0) {
+        try {
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: { status: 'contacted' },
+          });
+        } catch { /* column may not exist yet */ }
+      }
+
       // Advance to next step
       const nextStep = sequence.steps[nextStepIndex + 1];
       if (nextStep) {
@@ -162,10 +172,22 @@ export async function GET(req: NextRequest) {
           data: { currentStep: nextStepIndex + 1, nextSendAt: nextSend },
         });
       } else {
+        // Sequence complete — mark enrollment as completed
         await prisma.sequenceEnrollment.update({
           where: { id: enrollment.id },
           data: { status: 'completed', currentStep: nextStepIndex + 1, nextSendAt: null },
         });
+
+        // Log completion event
+        try {
+          await prisma.emailEvent.create({
+            data: {
+              leadId: lead.id,
+              type: 'sequence_completed',
+              details: `Completed sequence "${sequence.name}" (${sequence.steps.length} steps)`,
+            },
+          });
+        } catch { /* table may not exist yet */ }
       }
     }
 

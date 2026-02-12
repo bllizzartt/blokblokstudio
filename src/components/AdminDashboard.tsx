@@ -44,7 +44,7 @@ interface SavedTemplate {
   updatedAt: string;
 }
 
-type Tab = 'dashboard' | 'leads' | 'compose' | 'templates' | 'history' | 'accounts' | 'sequences' | 'warmup' | 'analytics';
+type Tab = 'dashboard' | 'leads' | 'compose' | 'templates' | 'history' | 'accounts' | 'sequences' | 'warmup' | 'analytics' | 'lists';
 type SendTarget = 'all' | 'selected' | 'individual';
 
 interface EmailEvent {
@@ -55,6 +55,38 @@ interface EmailEvent {
   type: string;
   details: string | null;
   createdAt: string;
+}
+
+interface LeadListData {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string;
+  memberCount: number;
+  sequenceStats: {
+    total: number;
+    notStarted: number;
+    inProgress: number;
+    completed: number;
+    replied: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface LeadEnrollment {
+  id: string;
+  sequenceId: string;
+  sequenceName: string;
+  currentStep: number;
+  totalSteps: number;
+  status: string;
+  nextSendAt: string | null;
+}
+
+interface ListLead extends Lead {
+  addedToListAt: string;
+  enrollments: LeadEnrollment[];
 }
 
 interface ABVariant {
@@ -271,6 +303,8 @@ export function AdminDashboard() {
   const [filterField, setFilterField] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterVerify, setFilterVerify] = useState('all');
+  const [filterList, setFilterList] = useState('all');
+  const [listMemberIds, setListMemberIds] = useState<Set<string>>(new Set());
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
 
@@ -411,6 +445,17 @@ export function AdminDashboard() {
   const [eventsFilter, setEventsFilter] = useState('all');
   const [eventsLeadFilter, setEventsLeadFilter] = useState('');
 
+  // Lead Lists
+  const [leadLists, setLeadLists] = useState<LeadListData[]>([]);
+  const [activeListId, setActiveListId] = useState<string | null>(null);
+  const [listLeads, setListLeads] = useState<ListLead[]>([]);
+  const [listSequences, setListSequences] = useState<{ id: string; name: string; active: boolean; stepCount: number }[]>([]);
+  const [showCreateList, setShowCreateList] = useState(false);
+  const [newListName, setNewListName] = useState('');
+  const [newListDesc, setNewListDesc] = useState('');
+  const [newListColor, setNewListColor] = useState('#f97316');
+  const [showAddToList, setShowAddToList] = useState(false);
+
   // Sidebar collapsed on mobile
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -423,6 +468,34 @@ export function AdminDashboard() {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${password}`,
   }), [password]);
+
+  // Lead enrollment map: leadId -> enrollment info
+  const [leadEnrollments, setLeadEnrollments] = useState<Record<string, LeadEnrollment[]>>({});
+
+  const fetchLeadEnrollments = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/sequences', { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        const map: Record<string, LeadEnrollment[]> = {};
+        for (const seq of (data.sequences || [])) {
+          for (const en of (seq.enrollments || [])) {
+            if (!map[en.leadId]) map[en.leadId] = [];
+            map[en.leadId].push({
+              id: en.id,
+              sequenceId: seq.id,
+              sequenceName: seq.name,
+              currentStep: en.currentStep,
+              totalSteps: seq.steps?.length || 0,
+              status: en.status,
+              nextSendAt: en.nextSendAt,
+            });
+          }
+        }
+        setLeadEnrollments(map);
+      }
+    } catch { /* silently fail */ }
+  }, [headers]);
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
@@ -500,6 +573,27 @@ export function AdminDashboard() {
     } catch { /* silently fail */ }
   }, [headers]);
 
+  const fetchLists = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/lists', { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        setLeadLists(data.lists || []);
+      }
+    } catch { /* silently fail */ }
+  }, [headers]);
+
+  const fetchListLeads = useCallback(async (listId: string) => {
+    try {
+      const res = await fetch(`/api/admin/lists/leads?listId=${listId}`, { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        setListLeads(data.leads || []);
+        setListSequences(data.sequences || []);
+      }
+    } catch { /* silently fail */ }
+  }, [headers]);
+
   const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const pw = password;
@@ -522,6 +616,8 @@ export function AdminDashboard() {
         fetchSequences();
         fetchTemplates();
         fetchEvents();
+        fetchLists();
+        fetchLeadEnrollments();
       } else {
         const data = await res.json().catch(() => ({}));
         localStorage.removeItem('bb_admin_pw');
@@ -557,8 +653,10 @@ export function AdminDashboard() {
       fetchSequences();
       fetchTemplates();
       fetchEvents();
+      fetchLists();
+      fetchLeadEnrollments();
     }
-  }, [authed, fetchLeads, fetchCampaigns, fetchAccounts, fetchSequences, fetchTemplates, fetchEvents]);
+  }, [authed, fetchLeads, fetchCampaigns, fetchAccounts, fetchSequences, fetchTemplates, fetchEvents, fetchLists, fetchLeadEnrollments]);
 
   // ── Derived data ──
   const activeLeads = leads.filter(l => !l.unsubscribed);
@@ -583,7 +681,8 @@ export function AdminDashboard() {
       || (filterVerify === 'verified' && l.emailVerified && l.verifyResult === 'valid')
       || (filterVerify === 'unverified' && !l.emailVerified)
       || (filterVerify === 'invalid' && l.emailVerified && l.verifyResult !== 'valid');
-    return matchSearch && matchField && matchStatus && matchVerify;
+    const matchList = filterList === 'all' || listMemberIds.has(l.id);
+    return matchSearch && matchField && matchStatus && matchVerify && matchList;
   });
 
   // ── Actions ──
@@ -994,6 +1093,7 @@ export function AdminDashboard() {
   const navItems: { id: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <IconDashboard /> },
     { id: 'leads', label: 'Leads', icon: <IconLeads />, badge: leads.length },
+    { id: 'lists', label: 'Lists', icon: <IconDashboard />, badge: leadLists.length },
     { id: 'compose', label: 'Compose', icon: <IconCompose /> },
     { id: 'templates', label: 'Templates', icon: <IconCompose />, badge: savedTemplates.length },
     { id: 'sequences', label: 'Sequences', icon: <IconHistory /> },
@@ -1303,6 +1403,30 @@ export function AdminDashboard() {
                         <option value="booked">Booked</option>
                         <option value="not_interested">Not Interested</option>
                       </select>
+                      {leadLists.length > 0 && (
+                        <select
+                          onChange={async (e) => {
+                            const listId = e.target.value;
+                            if (!listId) return;
+                            const ids = [...selectedLeadIds];
+                            const res = await fetch('/api/admin/lists', {
+                              method: 'POST',
+                              headers: headers(),
+                              body: JSON.stringify({ action: 'addLeads', listId, leadIds: ids }),
+                            });
+                            const data = await res.json();
+                            if (res.ok) showToast('success', `Added ${data.added} leads to list`);
+                            fetchLists();
+                            e.target.value = '';
+                          }}
+                          className="px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5 text-sm text-gray-400 focus:outline-none"
+                        >
+                          <option value="">Add to List...</option>
+                          {leadLists.map(l => (
+                            <option key={l.id} value={l.id}>{l.name} ({l.memberCount})</option>
+                          ))}
+                        </select>
+                      )}
                       <button
                         onClick={() => setSelectedLeadIds(new Set())}
                         className="p-2 rounded-lg hover:bg-white/5 text-gray-500 hover:text-white transition-colors"
@@ -1382,6 +1506,31 @@ export function AdminDashboard() {
                   <option value="unverified">Unverified</option>
                   <option value="invalid">Invalid/Risky</option>
                 </select>
+                {leadLists.length > 0 && (
+                  <select
+                    value={filterList}
+                    onChange={async (e) => {
+                      const val = e.target.value;
+                      setFilterList(val);
+                      if (val !== 'all') {
+                        // Fetch members of this list
+                        const res = await fetch(`/api/admin/lists/leads?listId=${val}`, { headers: headers() });
+                        if (res.ok) {
+                          const data = await res.json();
+                          setListMemberIds(new Set((data.leads || []).map((l: ListLead) => l.id)));
+                        }
+                      } else {
+                        setListMemberIds(new Set());
+                      }
+                    }}
+                    className="appearance-none bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 pr-10 text-sm text-gray-300 focus:outline-none focus:border-orange-500/30 transition-all cursor-pointer"
+                  >
+                    <option value="all">All Lists</option>
+                    {leadLists.map(l => (
+                      <option key={l.id} value={l.id}>{l.name} ({l.memberCount})</option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               {/* Select all checkbox */}
@@ -1469,6 +1618,24 @@ export function AdminDashboard() {
                             {lead.tags && (() => { try { const t: string[] = JSON.parse(lead.tags); return t.slice(0, 3).map((tag: string) => (
                               <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400">{tag}</span>
                             )); } catch { return null; } })()}
+                            {/* Sequence progress mini-indicator */}
+                            {leadEnrollments[lead.id]?.map(en => (
+                              <span key={en.id} className="inline-flex items-center gap-1">
+                                <span className="flex gap-px">
+                                  {Array.from({ length: en.totalSteps }, (_, i) => (
+                                    <span key={i} className={`w-1.5 h-1.5 rounded-sm ${
+                                      en.status === 'completed' ? 'bg-green-500' :
+                                      i < en.currentStep ? 'bg-blue-500' :
+                                      i === en.currentStep ? 'bg-orange-500' :
+                                      'bg-white/10'
+                                    }`} />
+                                  ))}
+                                </span>
+                                <span className={`text-[10px] ${en.status === 'completed' ? 'text-green-400' : 'text-blue-400'}`}>
+                                  {en.status === 'completed' ? 'done' : `${en.currentStep}/${en.totalSteps}`}
+                                </span>
+                              </span>
+                            ))}
                             {lead.unsubscribed && (
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">Unsubscribed</span>
                             )}
@@ -1630,6 +1797,384 @@ export function AdminDashboard() {
                       )}
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── LISTS TAB ── */}
+          {tab === 'lists' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold">Lead Lists</h2>
+                  <p className="text-sm text-gray-500 mt-1">Organize leads into lists, track sequence progress, and never lose track</p>
+                </div>
+                <button
+                  onClick={() => { setNewListName(''); setNewListDesc(''); setNewListColor('#f97316'); setShowCreateList(true); }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-medium"
+                >
+                  + New List
+                </button>
+              </div>
+
+              {/* Active list view */}
+              {activeListId ? (() => {
+                const activeList = leadLists.find(l => l.id === activeListId);
+                if (!activeList) return null;
+                return (
+                  <div className="space-y-4">
+                    {/* List header */}
+                    <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => { setActiveListId(null); setListLeads([]); }} className="p-2 rounded-lg hover:bg-white/5 text-gray-400">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+                          </button>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: activeList.color }} />
+                              <h3 className="text-lg font-bold">{activeList.name}</h3>
+                            </div>
+                            {activeList.description && <p className="text-xs text-gray-500 mt-0.5">{activeList.description}</p>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {/* Enroll all in sequence */}
+                          {listSequences.length > 0 && listLeads.length > 0 && (
+                            <select
+                              onChange={async (e) => {
+                                const seqId = e.target.value;
+                                if (!seqId) return;
+                                const leadIds = listLeads.filter(l => {
+                                  // Only enroll leads not already in this sequence
+                                  return !l.enrollments.some(en => en.sequenceId === seqId);
+                                }).map(l => l.id);
+                                if (leadIds.length === 0) { showToast('error', 'All leads already enrolled in this sequence'); e.target.value = ''; return; }
+                                const res = await fetch('/api/admin/sequences', {
+                                  method: 'PATCH',
+                                  headers: headers(),
+                                  body: JSON.stringify({ id: seqId, action: 'enroll', leadIds }),
+                                });
+                                const data = await res.json();
+                                if (res.ok) showToast('success', `Enrolled ${data.enrolled} leads`);
+                                fetchListLeads(activeListId);
+                                e.target.value = '';
+                              }}
+                              className="px-3 py-2 rounded-xl bg-orange-500/10 text-orange-400 text-sm font-medium focus:outline-none cursor-pointer"
+                            >
+                              <option value="">Enroll all in sequence...</option>
+                              {listSequences.filter(s => s.active).map(s => (
+                                <option key={s.id} value={s.id}>{s.name} ({s.stepCount} steps)</option>
+                              ))}
+                            </select>
+                          )}
+                          <button
+                            onClick={() => fetchListLeads(activeListId)}
+                            className="p-2 rounded-lg bg-white/[0.03] border border-white/5 text-gray-400 hover:text-white"
+                          >
+                            <IconRefresh />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Stats bar */}
+                      <div className="grid grid-cols-5 gap-2 mt-4">
+                        {[
+                          { label: 'Total', value: activeList.sequenceStats.total, color: 'text-gray-200' },
+                          { label: 'Not Started', value: activeList.sequenceStats.notStarted, color: 'text-gray-400' },
+                          { label: 'In Sequence', value: activeList.sequenceStats.inProgress, color: 'text-blue-400' },
+                          { label: 'Completed', value: activeList.sequenceStats.completed, color: 'text-green-400' },
+                          { label: 'Replied', value: activeList.sequenceStats.replied, color: 'text-orange-400' },
+                        ].map(s => (
+                          <div key={s.label} className="text-center p-2 rounded-lg bg-white/[0.02]">
+                            <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+                            <p className="text-[10px] text-gray-500 uppercase">{s.label}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Progress bar */}
+                      {activeList.sequenceStats.total > 0 && (
+                        <div className="mt-3">
+                          <div className="h-2 rounded-full bg-white/5 overflow-hidden flex">
+                            {activeList.sequenceStats.completed > 0 && (
+                              <div className="h-full bg-green-500" style={{ width: `${(activeList.sequenceStats.completed / activeList.sequenceStats.total) * 100}%` }} />
+                            )}
+                            {activeList.sequenceStats.inProgress > 0 && (
+                              <div className="h-full bg-blue-500" style={{ width: `${(activeList.sequenceStats.inProgress / activeList.sequenceStats.total) * 100}%` }} />
+                            )}
+                            {activeList.sequenceStats.replied > 0 && (
+                              <div className="h-full bg-orange-500" style={{ width: `${(activeList.sequenceStats.replied / activeList.sequenceStats.total) * 100}%` }} />
+                            )}
+                          </div>
+                          <div className="flex gap-4 mt-1.5 text-[10px] text-gray-500">
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> Completed</span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" /> In Progress</span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" /> Replied</span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-white/10" /> Not Started</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Lead list with sequence progress */}
+                    {listLeads.length === 0 ? (
+                      <div className="text-center py-12 rounded-2xl bg-white/[0.02] border border-white/5">
+                        <p className="text-gray-400 mb-2">No leads in this list yet</p>
+                        <p className="text-xs text-gray-500">Go to the Leads tab, select leads, and use &quot;Add to List&quot; to populate this list.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {listLeads.map(lead => (
+                          <div key={lead.id} className="rounded-2xl bg-white/[0.02] border border-white/5 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500/20 to-red-500/20 flex items-center justify-center flex-shrink-0">
+                                  <span className="text-sm font-bold text-orange-400">{lead.name.charAt(0).toUpperCase()}</span>
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h4 className="font-semibold text-sm">{lead.name}</h4>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                                      (lead.status || 'new') === 'new' ? 'bg-gray-500/10 text-gray-400' :
+                                      (lead.status || 'new') === 'contacted' ? 'bg-blue-500/10 text-blue-400' :
+                                      (lead.status || 'new') === 'replied' ? 'bg-purple-500/10 text-purple-400' :
+                                      (lead.status || 'new') === 'interested' ? 'bg-green-500/10 text-green-400' :
+                                      (lead.status || 'new') === 'booked' ? 'bg-emerald-500/10 text-emerald-400' :
+                                      'bg-yellow-500/10 text-yellow-400'
+                                    }`}>{(lead.status || 'new').replace('_', ' ')}</span>
+                                    <span className="text-[10px] text-gray-500">{lead.emailsSent} sent</span>
+                                  </div>
+                                  <p className="text-xs text-gray-500 truncate">{lead.email}</p>
+                                </div>
+                              </div>
+
+                              {/* Sequence progress */}
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                {lead.enrollments.length === 0 ? (
+                                  <span className="text-[10px] px-2.5 py-1 rounded-full bg-white/5 text-gray-500">No sequence</span>
+                                ) : lead.enrollments.map(en => (
+                                  <div key={en.id} className="flex items-center gap-1.5">
+                                    <div className="flex gap-0.5">
+                                      {Array.from({ length: en.totalSteps }, (_, i) => (
+                                        <div
+                                          key={i}
+                                          className={`w-3 h-3 rounded-sm ${
+                                            en.status === 'completed' ? 'bg-green-500' :
+                                            i < en.currentStep ? 'bg-blue-500' :
+                                            i === en.currentStep ? 'bg-orange-500 animate-pulse' :
+                                            'bg-white/10'
+                                          }`}
+                                          title={`Step ${i + 1}/${en.totalSteps}`}
+                                        />
+                                      ))}
+                                    </div>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                                      en.status === 'completed' ? 'bg-green-500/10 text-green-400' :
+                                      en.status === 'active' ? 'bg-blue-500/10 text-blue-400' :
+                                      en.status === 'paused' ? 'bg-yellow-500/10 text-yellow-400' :
+                                      'bg-gray-500/10 text-gray-400'
+                                    }`}>
+                                      {en.status === 'completed' ? 'Done' : en.status === 'active' ? `${en.currentStep}/${en.totalSteps}` : en.status}
+                                    </span>
+                                  </div>
+                                ))}
+
+                                {/* Remove from list */}
+                                <button
+                                  onClick={async () => {
+                                    await fetch('/api/admin/lists', {
+                                      method: 'POST',
+                                      headers: headers(),
+                                      body: JSON.stringify({ action: 'removeLeads', listId: activeListId, leadIds: [lead.id] }),
+                                    });
+                                    fetchListLeads(activeListId);
+                                    fetchLists();
+                                    showToast('success', 'Removed from list');
+                                  }}
+                                  className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400"
+                                  title="Remove from list"
+                                >
+                                  <IconX />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Sequence timeline detail */}
+                            {lead.enrollments.length > 0 && (
+                              <div className="mt-3 pl-[52px]">
+                                {lead.enrollments.map(en => (
+                                  <div key={en.id} className="flex items-center gap-2 text-xs text-gray-500">
+                                    <span className="font-medium text-gray-400">{en.sequenceName}</span>
+                                    <span>&middot;</span>
+                                    <span>Step {en.currentStep}/{en.totalSteps}</span>
+                                    {en.nextSendAt && en.status === 'active' && (
+                                      <>
+                                        <span>&middot;</span>
+                                        <span>Next: {new Date(en.nextSendAt).toLocaleDateString()}</span>
+                                      </>
+                                    )}
+                                    {en.status === 'completed' && (
+                                      <>
+                                        <span>&middot;</span>
+                                        <span className="text-green-400">Sequence complete</span>
+                                      </>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })() : (
+                /* List cards view */
+                <>
+                  {leadLists.length === 0 && !showCreateList ? (
+                    <div className="text-center py-16 rounded-2xl bg-white/[0.02] border border-white/5">
+                      <div className="w-16 h-16 rounded-full bg-orange-500/10 mx-auto mb-4 flex items-center justify-center">
+                        <IconDashboard />
+                      </div>
+                      <p className="text-gray-300 font-medium mb-2">No lists yet</p>
+                      <p className="text-xs text-gray-500 max-w-lg mx-auto leading-relaxed">
+                        Lists let you organize leads into groups like &quot;January Cold Outreach&quot; or &quot;Dentists NYC&quot;.
+                        You can track which leads have been through your sequences and which still need attention.
+                      </p>
+                      <button
+                        onClick={() => setShowCreateList(true)}
+                        className="mt-4 text-sm text-orange-400 hover:text-orange-300"
+                      >
+                        Create your first list
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {leadLists.map(list => (
+                        <button
+                          key={list.id}
+                          onClick={() => { setActiveListId(list.id); fetchListLeads(list.id); }}
+                          className="rounded-2xl bg-white/[0.02] border border-white/5 p-5 text-left hover:border-white/10 transition-all group"
+                        >
+                          <div className="flex items-start justify-between gap-3 mb-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: list.color }} />
+                              <h3 className="font-semibold">{list.name}</h3>
+                            </div>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (!confirm(`Delete list "${list.name}"? (Leads are not deleted)`)) return;
+                                  await fetch(`/api/admin/lists?id=${list.id}`, { method: 'DELETE', headers: headers() });
+                                  fetchLists();
+                                  showToast('success', 'List deleted');
+                                }}
+                                className="p-1 rounded hover:bg-red-500/10 text-gray-500 hover:text-red-400"
+                              >
+                                <IconTrash />
+                              </button>
+                            </div>
+                          </div>
+                          {list.description && <p className="text-xs text-gray-500 mb-3">{list.description}</p>}
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-2xl font-bold text-gray-200">{list.memberCount}</span>
+                            <span className="text-xs text-gray-500">leads</span>
+                          </div>
+
+                          {/* Mini progress bar */}
+                          {list.memberCount > 0 && (
+                            <div>
+                              <div className="h-1.5 rounded-full bg-white/5 overflow-hidden flex mb-2">
+                                {list.sequenceStats.completed > 0 && (
+                                  <div className="h-full bg-green-500" style={{ width: `${(list.sequenceStats.completed / list.sequenceStats.total) * 100}%` }} />
+                                )}
+                                {list.sequenceStats.inProgress > 0 && (
+                                  <div className="h-full bg-blue-500" style={{ width: `${(list.sequenceStats.inProgress / list.sequenceStats.total) * 100}%` }} />
+                                )}
+                                {list.sequenceStats.replied > 0 && (
+                                  <div className="h-full bg-orange-500" style={{ width: `${(list.sequenceStats.replied / list.sequenceStats.total) * 100}%` }} />
+                                )}
+                              </div>
+                              <div className="flex gap-3 text-[10px] text-gray-500">
+                                <span>{list.sequenceStats.notStarted} waiting</span>
+                                <span className="text-blue-400">{list.sequenceStats.inProgress} sending</span>
+                                <span className="text-green-400">{list.sequenceStats.completed} done</span>
+                                <span className="text-orange-400">{list.sequenceStats.replied} replied</span>
+                              </div>
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Create list modal */}
+              {showCreateList && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowCreateList(false)}>
+                  <div className="w-full max-w-md bg-[#161616] border border-white/10 rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+                    <h3 className="font-semibold text-lg mb-4">Create New List</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs text-gray-500 uppercase tracking-wider mb-2">List Name</label>
+                        <input
+                          placeholder="e.g. January Cold Outreach, Dentists NYC"
+                          value={newListName}
+                          onChange={e => setNewListName(e.target.value)}
+                          className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30"
+                          autoFocus
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 uppercase tracking-wider mb-2">Description (optional)</label>
+                        <input
+                          placeholder="Quick notes about this list"
+                          value={newListDesc}
+                          onChange={e => setNewListDesc(e.target.value)}
+                          className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 uppercase tracking-wider mb-2">Color</label>
+                        <div className="flex gap-2">
+                          {['#f97316', '#ef4444', '#8b5cf6', '#3b82f6', '#22c55e', '#eab308', '#ec4899', '#06b6d4'].map(c => (
+                            <button
+                              key={c}
+                              onClick={() => setNewListColor(c)}
+                              className={`w-8 h-8 rounded-full transition-all ${newListColor === c ? 'ring-2 ring-white ring-offset-2 ring-offset-[#161616] scale-110' : 'hover:scale-105'}`}
+                              style={{ backgroundColor: c }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-6">
+                      <button
+                        onClick={async () => {
+                          if (!newListName.trim()) { showToast('error', 'Enter a list name'); return; }
+                          const res = await fetch('/api/admin/lists', {
+                            method: 'POST',
+                            headers: headers(),
+                            body: JSON.stringify({ name: newListName.trim(), description: newListDesc.trim() || null, color: newListColor }),
+                          });
+                          if (res.ok) {
+                            showToast('success', 'List created!');
+                            setShowCreateList(false);
+                            fetchLists();
+                          }
+                        }}
+                        className="flex-1 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold text-sm"
+                      >
+                        Create List
+                      </button>
+                      <button onClick={() => setShowCreateList(false)} className="px-6 py-3 rounded-xl bg-white/[0.03] border border-white/5 text-gray-400 text-sm">Cancel</button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

@@ -151,3 +151,24 @@ model EmailEvent {
   @@index([campaignId])
   @@index([type])
 }
+
+model LeadList {
+  id          String           @id @default(cuid())
+  name        String
+  description String?
+  color       String           @default("#f97316") // UI badge color
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  members     LeadListMember[]
+}
+
+model LeadListMember {
+  id        String   @id @default(cuid())
+  listId    String
+  list      LeadList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  leadId    String
+  addedAt   DateTime @default(now())
+
+  @@unique([listId, leadId])
+  @@index([leadId])
+}
