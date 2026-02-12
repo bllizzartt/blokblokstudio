@@ -29,7 +29,16 @@ interface Campaign {
   createdAt: string;
 }
 
-type Tab = 'dashboard' | 'leads' | 'compose' | 'history' | 'accounts' | 'sequences' | 'warmup';
+interface SavedTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+type Tab = 'dashboard' | 'leads' | 'compose' | 'templates' | 'history' | 'accounts' | 'sequences' | 'warmup';
 type SendTarget = 'all' | 'selected' | 'individual';
 
 interface AccountStat {
@@ -255,6 +264,14 @@ export function AdminDashboard() {
   const [scheduledAt, setScheduledAt] = useState('');
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
+  // Saved Templates
+  const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>([]);
+  const [showCreateTemplate, setShowCreateTemplate] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<SavedTemplate | null>(null);
+  const [tplName, setTplName] = useState('');
+  const [tplSubject, setTplSubject] = useState('');
+  const [tplBody, setTplBody] = useState('');
+
   // CSV Import
   const [showImportModal, setShowImportModal] = useState(false);
   const [importData, setImportData] = useState<Record<string, string>[]>([]);
@@ -410,6 +427,16 @@ export function AdminDashboard() {
     } catch { /* silently fail */ }
   }, [headers]);
 
+  const fetchTemplates = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/templates', { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        setSavedTemplates(data.templates);
+      }
+    } catch { /* silently fail */ }
+  }, [headers]);
+
   const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const pw = password;
@@ -425,6 +452,7 @@ export function AdminDashboard() {
       fetchCampaigns();
       fetchAccounts();
       fetchSequences();
+      fetchTemplates();
     } else {
       localStorage.removeItem('bb_admin_pw');
       if (e) showToast('error', 'Wrong password');
@@ -445,8 +473,9 @@ export function AdminDashboard() {
       fetchCampaigns();
       fetchAccounts();
       fetchSequences();
+      fetchTemplates();
     }
-  }, [authed, fetchLeads, fetchCampaigns, fetchAccounts, fetchSequences]);
+  }, [authed, fetchLeads, fetchCampaigns, fetchAccounts, fetchSequences, fetchTemplates]);
 
   // ── Derived data ──
   const activeLeads = leads.filter(l => !l.unsubscribed);
@@ -872,6 +901,7 @@ export function AdminDashboard() {
     { id: 'dashboard', label: 'Dashboard', icon: <IconDashboard /> },
     { id: 'leads', label: 'Leads', icon: <IconLeads />, badge: leads.length },
     { id: 'compose', label: 'Compose', icon: <IconCompose /> },
+    { id: 'templates', label: 'Templates', icon: <IconCompose />, badge: savedTemplates.length },
     { id: 'sequences', label: 'Sequences', icon: <IconHistory /> },
     { id: 'accounts', label: 'Accounts', icon: <IconMail />, badge: accounts.length },
     { id: 'warmup', label: 'Warmup', icon: <IconVideo /> },
@@ -1383,13 +1413,31 @@ export function AdminDashboard() {
                   </button>
 
                   {showTemplates && (
-                    <div className="absolute top-full left-0 mt-2 w-full sm:w-96 bg-[#161616] border border-white/10 rounded-2xl shadow-2xl z-20 overflow-hidden">
+                    <div className="absolute top-full left-0 mt-2 w-full sm:w-96 bg-[#161616] border border-white/10 rounded-2xl shadow-2xl z-20 overflow-hidden max-h-80 overflow-y-auto">
+                      {savedTemplates.length > 0 && (
+                        <>
+                          <div className="p-3 border-b border-white/5">
+                            <p className="text-xs text-orange-400 font-medium">Your Templates</p>
+                          </div>
+                          {savedTemplates.map(t => (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => loadTemplate(t)}
+                              className="w-full text-left px-4 py-3 hover:bg-white/[0.03] transition-colors border-b border-white/5"
+                            >
+                              <p className="text-sm font-medium text-gray-200">{t.name}</p>
+                              <p className="text-xs text-gray-500 mt-0.5 truncate">{t.subject}</p>
+                            </button>
+                          ))}
+                        </>
+                      )}
                       <div className="p-3 border-b border-white/5">
-                        <p className="text-xs text-gray-500 font-medium">Choose a template to get started</p>
+                        <p className="text-xs text-gray-500 font-medium">Built-in Templates</p>
                       </div>
                       {EMAIL_TEMPLATES.map((t, i) => (
                         <button
-                          key={i}
+                          key={`builtin-${i}`}
                           type="button"
                           onClick={() => loadTemplate(t)}
                           className="w-full text-left px-4 py-3 hover:bg-white/[0.03] transition-colors border-b border-white/5 last:border-b-0"
@@ -1559,6 +1607,217 @@ export function AdminDashboard() {
                   </p>
                 </div>
               </form>
+            </div>
+          )}
+
+          {/* ── TEMPLATES TAB ── */}
+          {tab === 'templates' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">Email Templates</h2>
+                  <p className="text-sm text-gray-500 mt-1">Create reusable templates for campaigns and sequences</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setEditingTemplate(null);
+                    setTplName('');
+                    setTplSubject('');
+                    setTplBody('');
+                    setShowCreateTemplate(true);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-medium"
+                >
+                  + New Template
+                </button>
+              </div>
+
+              {savedTemplates.length === 0 && !showCreateTemplate ? (
+                <div className="text-center py-16 rounded-2xl bg-white/[0.02] border border-white/5">
+                  <div className="w-16 h-16 rounded-full bg-orange-500/10 mx-auto mb-4 flex items-center justify-center">
+                    <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-orange-400"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                  </div>
+                  <p className="text-gray-300 font-medium mb-2">No templates yet</p>
+                  <p className="text-xs text-gray-500 max-w-md mx-auto">Create reusable email templates that you can quickly load into campaigns or assign to sequence steps.</p>
+                  <button
+                    onClick={() => { setEditingTemplate(null); setTplName(''); setTplSubject(''); setTplBody(''); setShowCreateTemplate(true); }}
+                    className="mt-4 text-sm text-orange-400 hover:text-orange-300"
+                  >
+                    Create your first template
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {savedTemplates.map(tpl => (
+                    <div key={tpl.id} className="rounded-2xl bg-white/[0.02] border border-white/5 p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold">{tpl.name}</h3>
+                          <p className="text-xs text-gray-500 mt-0.5 truncate">Subject: {tpl.subject}</p>
+                          <div className="mt-2 text-xs text-gray-600 line-clamp-2 leading-relaxed" dangerouslySetInnerHTML={{ __html: tpl.body.slice(0, 200) }} />
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => {
+                              setEditingTemplate(tpl);
+                              setTplName(tpl.name);
+                              setTplSubject(tpl.subject);
+                              setTplBody(tpl.body);
+                              setShowCreateTemplate(true);
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs bg-white/[0.03] border border-white/5 text-gray-400 hover:text-white"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSubject(tpl.subject);
+                              setBody(tpl.body);
+                              setTab('compose');
+                              showToast('success', `Loaded "${tpl.name}" into composer`);
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs bg-orange-500/10 text-orange-400 hover:bg-orange-500/20"
+                          >
+                            Use in Compose
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`Delete template "${tpl.name}"?`)) return;
+                              await fetch(`/api/admin/templates?id=${tpl.id}`, { method: 'DELETE', headers: headers() });
+                              fetchTemplates();
+                              showToast('success', 'Template deleted');
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400"
+                          >
+                            <IconTrash />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Built-in templates */}
+              <div>
+                <h3 className="text-sm font-medium text-gray-400 mb-3">Built-in Templates</h3>
+                <div className="space-y-2">
+                  {EMAIL_TEMPLATES.map((t, i) => (
+                    <div key={i} className="rounded-xl bg-white/[0.02] border border-white/5 p-4 flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-300">{t.name}</p>
+                        <p className="text-xs text-gray-600 truncate">{t.subject}</p>
+                      </div>
+                      <div className="flex gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => {
+                            setEditingTemplate(null);
+                            setTplName(t.name + ' (copy)');
+                            setTplSubject(t.subject);
+                            setTplBody(t.body);
+                            setShowCreateTemplate(true);
+                          }}
+                          className="px-3 py-1.5 rounded-lg text-xs bg-white/[0.03] border border-white/5 text-gray-400 hover:text-white"
+                        >
+                          Save as My Template
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSubject(t.subject);
+                            setBody(t.body);
+                            setTab('compose');
+                            showToast('success', `Loaded "${t.name}" into composer`);
+                          }}
+                          className="px-3 py-1.5 rounded-lg text-xs bg-orange-500/10 text-orange-400 hover:bg-orange-500/20"
+                        >
+                          Use
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Create / Edit template modal */}
+              {showCreateTemplate && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowCreateTemplate(false)}>
+                  <div className="w-full max-w-2xl bg-[#161616] border border-white/10 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                    <div className="p-6 border-b border-white/5">
+                      <h3 className="font-semibold">{editingTemplate ? 'Edit Template' : 'Create Template'}</h3>
+                    </div>
+                    <div className="p-6 space-y-4">
+                      <div>
+                        <label className="block text-xs text-gray-500 uppercase tracking-wider mb-2">Template Name</label>
+                        <input
+                          placeholder="e.g. Welcome Email, Follow-Up #1"
+                          value={tplName}
+                          onChange={e => setTplName(e.target.value)}
+                          className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 uppercase tracking-wider mb-2">Subject Line</label>
+                        <input
+                          placeholder="e.g. Your free audit is ready, {{name}}!"
+                          value={tplSubject}
+                          onChange={e => setTplSubject(e.target.value)}
+                          className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30"
+                        />
+                        <p className="text-[10px] text-gray-600 mt-1">Supports merge tags: {'{{name}}'}, {'{{field}}'}, {'{{problem}}'}, {'{{website}}'}</p>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 uppercase tracking-wider mb-2">Email Body (HTML)</label>
+                        <textarea
+                          placeholder="Write your email HTML here..."
+                          rows={12}
+                          value={tplBody}
+                          onChange={e => setTplBody(e.target.value)}
+                          className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30 font-mono resize-y"
+                        />
+                      </div>
+                      {tplBody && (
+                        <div>
+                          <label className="block text-xs text-gray-500 uppercase tracking-wider mb-2">Preview</label>
+                          <div className="rounded-xl bg-white p-4 text-black text-sm" dangerouslySetInnerHTML={{ __html: tplBody }} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-6 border-t border-white/5 flex gap-2">
+                      <button
+                        onClick={async () => {
+                          if (!tplName || !tplSubject || !tplBody) {
+                            showToast('error', 'Fill in all fields');
+                            return;
+                          }
+                          const payload: Record<string, string> = { name: tplName, subject: tplSubject, body: tplBody };
+                          if (editingTemplate) payload.id = editingTemplate.id;
+                          const res = await fetch('/api/admin/templates', {
+                            method: 'POST',
+                            headers: headers(),
+                            body: JSON.stringify(payload),
+                          });
+                          if (res.ok) {
+                            showToast('success', editingTemplate ? 'Template updated!' : 'Template created!');
+                            setShowCreateTemplate(false);
+                            setEditingTemplate(null);
+                            setTplName('');
+                            setTplSubject('');
+                            setTplBody('');
+                            fetchTemplates();
+                          } else {
+                            const data = await res.json();
+                            showToast('error', data.error);
+                          }
+                        }}
+                        className="flex-1 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold"
+                      >
+                        {editingTemplate ? 'Save Changes' : 'Create Template'}
+                      </button>
+                      <button onClick={() => setShowCreateTemplate(false)} className="px-6 py-3 rounded-xl bg-white/[0.03] border border-white/5 text-gray-400">Cancel</button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -2137,6 +2396,26 @@ export function AdminDashboard() {
                               )}
                             </div>
                           </div>
+                          {savedTemplates.length > 0 && (
+                            <select
+                              onChange={e => {
+                                const tpl = savedTemplates.find(t => t.id === e.target.value);
+                                if (tpl) {
+                                  const s = [...newSeqSteps];
+                                  s[i].subject = tpl.subject;
+                                  s[i].body = tpl.body;
+                                  setNewSeqSteps(s);
+                                }
+                              }}
+                              value=""
+                              className="w-full bg-white/[0.03] border border-white/5 rounded-lg px-3 py-2 text-sm text-gray-400 focus:outline-none focus:border-orange-500/30"
+                            >
+                              <option value="">Load from template...</option>
+                              {savedTemplates.map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                              ))}
+                            </select>
+                          )}
                           <input
                             placeholder="Subject line"
                             value={step.subject}

@@ -119,6 +119,20 @@ export async function POST(req: NextRequest) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "EmailCampaign" ADD COLUMN IF NOT EXISTS "leadIds" TEXT`);
     results.push('EmailCampaign columns updated');
 
+    // Create EmailTemplate table
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "EmailTemplate" (
+        "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+        "name" TEXT NOT NULL,
+        "subject" TEXT NOT NULL,
+        "body" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "EmailTemplate_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    results.push('EmailTemplate table ready');
+
     return NextResponse.json({ success: true, results });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
