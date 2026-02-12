@@ -6,10 +6,41 @@ import { getNextAccount, sendViaSMTP, recordSend, checkBounceThreshold } from '@
 import { processSpintax, pickVariant } from '@/lib/verify';
 
 /**
+ * Inject open tracking pixel and wrap links for click tracking.
+ */
+function injectTracking(html: string, leadId: string, campaignId?: string): string {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || (process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'http://localhost:3000');
+
+  const params = `lid=${encodeURIComponent(leadId)}${campaignId ? `&cid=${encodeURIComponent(campaignId)}` : ''}`;
+
+  // Inject tracking pixel before </body> or at end
+  const pixel = `<img src="${baseUrl}/api/track?t=open&${params}" width="1" height="1" style="display:none" alt="" />`;
+  let tracked = html.includes('</body>')
+    ? html.replace('</body>', `${pixel}</body>`)
+    : html + pixel;
+
+  // Wrap links for click tracking (only http/https links, skip unsubscribe)
+  tracked = tracked.replace(
+    /href="(https?:\/\/[^"]+)"/g,
+    (match, url) => {
+      // Don't track unsubscribe links
+      if (url.includes('/api/unsubscribe') || url.includes('/api/track')) return match;
+      const trackUrl = `${baseUrl}/api/track?t=click&${params}&url=${encodeURIComponent(url)}`;
+      return `href="${trackUrl}"`;
+    }
+  );
+
+  return tracked;
+}
+
+/**
  * Cron job — runs daily at 8am UTC.
  * 1. Processes scheduled campaigns that have reached their send time
  * 2. Processes active sequence enrollments that are due
  * 3. Uses SMTP accounts with rotation when available, falls back to Resend
+ * 4. Injects open/click tracking into all outgoing emails
  */
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
@@ -206,8 +237,12 @@ export async function GET(req: NextRequest) {
 
 /**
  * Try SMTP accounts first (with rotation), fall back to Resend.
+ * Injects open/click tracking into the HTML before sending.
  */
 async function sendWithRotation(to: string, subject: string, html: string, leadId: string, campaignId?: string): Promise<boolean> {
+  // Inject tracking pixel and link wrapping
+  const trackedHtml = injectTracking(html, leadId, campaignId);
+
   const account = await getNextAccount();
   if (account) {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || (process.env.VERCEL_URL
@@ -218,7 +253,7 @@ async function sendWithRotation(to: string, subject: string, html: string, leadI
     const result = await sendViaSMTP(account, {
       to,
       subject,
-      html,
+      html: trackedHtml,
       unsubscribeUrl,
       leadId,
       campaignId,
@@ -233,5 +268,5 @@ async function sendWithRotation(to: string, subject: string, html: string, leadI
   }
 
   // Fall back to Resend
-  return sendCampaignEmail({ to, subject, html, leadId });
+  return sendCampaignEmail({ to, subject, html: trackedHtml, leadId });
 }

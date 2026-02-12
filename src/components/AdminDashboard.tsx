@@ -45,7 +45,7 @@ interface SavedTemplate {
   updatedAt: string;
 }
 
-type Tab = 'dashboard' | 'leads' | 'compose' | 'templates' | 'history' | 'accounts' | 'sequences' | 'warmup' | 'analytics' | 'lists';
+type Tab = 'dashboard' | 'leads' | 'compose' | 'templates' | 'history' | 'accounts' | 'sequences' | 'warmup' | 'analytics' | 'lists' | 'domains' | 'inbox';
 type SendTarget = 'all' | 'selected' | 'individual';
 
 interface EmailEvent {
@@ -341,9 +341,26 @@ export function AdminDashboard() {
   // Accounts & Warmup
   const [accounts, setAccounts] = useState<AccountStat[]>([]);
   const [showAddAccount, setShowAddAccount] = useState(false);
-  const [newAccount, setNewAccount] = useState({ email: '', smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', label: '' });
+  const [newAccount, setNewAccount] = useState({ email: '', smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', label: '', imapHost: '', imapPort: 993, imapUser: '', imapPass: '', sendWindowStart: 8, sendWindowEnd: 18 });
   const [selectedProvider, setSelectedProvider] = useState('');
   const [showSetupGuide, setShowSetupGuide] = useState(false);
+
+  // Domains
+  const [domains, setDomains] = useState<{ id: string; name: string; verified: boolean; lastCheckAt: string | null; lastCheckResult: string | null; dkimSelector: string; dkimPublicKey: string | null; createdAt: string }[]>([]);
+  const [showAddDomain, setShowAddDomain] = useState(false);
+  const [newDomainName, setNewDomainName] = useState('');
+  const [dnsRecords, setDnsRecords] = useState<Record<string, { type: string; host: string; value: string; description: string }> | null>(null);
+  const [dnsCheckResult, setDnsCheckResult] = useState<Record<string, { status: string; found: string; expected?: string }> | null>(null);
+
+  // Inbox
+  const [inboxMessages, setInboxMessages] = useState<{ id: string; fromEmail: string; toEmail: string; subject: string; bodyPreview: string; isAutoReply: boolean; isOOO: boolean; read: boolean; leadId: string | null; receivedAt: string }[]>([]);
+  const [inboxUnread, setInboxUnread] = useState(0);
+  const [inboxFilter, setInboxFilter] = useState('all');
+  const [inboxPage, setInboxPage] = useState(1);
+  const [inboxPages, setInboxPages] = useState(0);
+
+  // Warmup data
+  const [warmupData, setWarmupData] = useState<{ id: string; email: string; label: string; warmupEnabled: boolean; warmupDaily: number; warmupPhase: number; dailyLimit: number; daysSinceStart: number; sendWindowStart: number; sendWindowEnd: number; sendWeekdays: string; stats: { totalWarmupSent: number; totalInbox: number; totalSpam: number; inboxRate: number; recentInboxRate: number; totalSent: number; totalBounced: number; bounceRate: number }; warmupLogs: { date: string; sent: number; received: number; inbox: number; spam: number }[] }[]>([]);
 
   const EMAIL_PROVIDERS: Record<string, { label: string; smtpHost: string; smtpPort: number; instructions: string[] }> = {
     'google': {
@@ -595,6 +612,32 @@ export function AdminDashboard() {
     } catch { /* silently fail */ }
   }, [headers]);
 
+  const fetchDomains = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/domains', { headers: headers() });
+      if (res.ok) { const data = await res.json(); setDomains(data.domains || []); }
+    } catch { /* silently fail */ }
+  }, [headers]);
+
+  const fetchInbox = useCallback(async (page = 1, filter = 'all') => {
+    try {
+      const res = await fetch(`/api/admin/inbox?page=${page}&filter=${filter}`, { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        setInboxMessages(data.messages || []);
+        setInboxUnread(data.unread || 0);
+        setInboxPages(data.pages || 0);
+      }
+    } catch { /* silently fail */ }
+  }, [headers]);
+
+  const fetchWarmupData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/warmup', { headers: headers() });
+      if (res.ok) { const data = await res.json(); setWarmupData(data.accounts || []); }
+    } catch { /* silently fail */ }
+  }, [headers]);
+
   const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const pw = password;
@@ -619,6 +662,9 @@ export function AdminDashboard() {
         fetchEvents();
         fetchLists();
         fetchLeadEnrollments();
+        fetchDomains();
+        fetchInbox();
+        fetchWarmupData();
       } else {
         const data = await res.json().catch(() => ({}));
         localStorage.removeItem('bb_admin_pw');
@@ -1102,7 +1148,9 @@ export function AdminDashboard() {
     { id: 'templates', label: 'Templates', icon: <IconCompose />, badge: savedTemplates.length },
     { id: 'sequences', label: 'Sequences', icon: <IconHistory /> },
     { id: 'accounts', label: 'Accounts', icon: <IconMail />, badge: accounts.length },
+    { id: 'domains', label: 'Domains', icon: <IconVideo />, badge: domains.length },
     { id: 'warmup', label: 'Warmup', icon: <IconVideo /> },
+    { id: 'inbox', label: 'Inbox', icon: <IconLeads />, badge: inboxUnread || undefined },
     { id: 'analytics', label: 'Analytics', icon: <IconEye />, badge: eventsTotal },
     { id: 'history', label: 'History', icon: <IconHistory />, badge: campaigns.length },
   ];
@@ -3315,6 +3363,85 @@ export function AdminDashboard() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Step 6: IMAP Settings for Reply Tracking */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1.5">Reply Tracking (IMAP) — Optional</label>
+                        <p className="text-[11px] text-gray-500 mb-2">
+                          Enable reply tracking to automatically detect when leads respond. The system checks your inbox and updates lead status to &quot;replied&quot;.
+                        </p>
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="col-span-2">
+                              <input
+                                placeholder={selectedProvider && selectedProvider !== 'custom' ? EMAIL_PROVIDERS[selectedProvider]?.smtpHost?.replace('smtp', 'imap') || 'IMAP server' : 'imap.your-provider.com'}
+                                value={newAccount.imapHost}
+                                onChange={e => setNewAccount(p => ({ ...p, imapHost: e.target.value }))}
+                                className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30"
+                              />
+                              <p className="text-[10px] text-gray-600 mt-1">IMAP server (e.g. imap.gmail.com)</p>
+                            </div>
+                            <div>
+                              <input
+                                placeholder="993"
+                                type="number"
+                                value={newAccount.imapPort}
+                                onChange={e => setNewAccount(p => ({ ...p, imapPort: parseInt(e.target.value) || 993 }))}
+                                className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30"
+                              />
+                              <p className="text-[10px] text-gray-600 mt-1">Port (usually 993)</p>
+                            </div>
+                          </div>
+                          <input
+                            placeholder="IMAP login (usually same email)"
+                            value={newAccount.imapUser}
+                            onChange={e => setNewAccount(p => ({ ...p, imapUser: e.target.value }))}
+                            className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30"
+                          />
+                          <input
+                            placeholder="IMAP password (same app password)"
+                            type="password"
+                            value={newAccount.imapPass}
+                            onChange={e => setNewAccount(p => ({ ...p, imapPass: e.target.value }))}
+                            className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30"
+                          />
+                          <p className="text-[10px] text-gray-500">All passwords are encrypted with AES-256-GCM before storage</p>
+                        </div>
+                      </div>
+
+                      {/* Step 7: Send Window */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1.5">Send Window (UTC)</label>
+                        <p className="text-[11px] text-gray-500 mb-2">
+                          Only send emails during these hours. Emails outside this window are held until the next window opens.
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <select
+                              value={newAccount.sendWindowStart}
+                              onChange={e => setNewAccount(p => ({ ...p, sendWindowStart: parseInt(e.target.value) }))}
+                              className="w-full appearance-none bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-orange-500/30 cursor-pointer"
+                            >
+                              {Array.from({ length: 24 }, (_, i) => (
+                                <option key={i} value={i}>{i.toString().padStart(2, '0')}:00 UTC</option>
+                              ))}
+                            </select>
+                            <p className="text-[10px] text-gray-600 mt-1">Start time</p>
+                          </div>
+                          <div>
+                            <select
+                              value={newAccount.sendWindowEnd}
+                              onChange={e => setNewAccount(p => ({ ...p, sendWindowEnd: parseInt(e.target.value) }))}
+                              className="w-full appearance-none bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-orange-500/30 cursor-pointer"
+                            >
+                              {Array.from({ length: 24 }, (_, i) => (
+                                <option key={i} value={i}>{i.toString().padStart(2, '0')}:00 UTC</option>
+                              ))}
+                            </select>
+                            <p className="text-[10px] text-gray-600 mt-1">End time</p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="flex gap-2 mt-6">
@@ -3327,10 +3454,10 @@ export function AdminDashboard() {
                           const res = await fetch('/api/admin/accounts', { method: 'POST', headers: headers(), body: JSON.stringify(payload) });
                           const data = await res.json();
                           if (!res.ok) { showToast('error', data.error); return; }
-                          showToast('success', 'Account connected successfully!');
+                          showToast('success', 'Account connected — passwords encrypted at rest');
                           setShowAddAccount(false);
                           setSelectedProvider('');
-                          setNewAccount({ email: '', smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', label: '' });
+                          setNewAccount({ email: '', smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', label: '', imapHost: '', imapPort: 993, imapUser: '', imapPass: '', sendWindowStart: 8, sendWindowEnd: 18 });
                           fetchAccounts();
                         }}
                         className="flex-1 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold text-sm"
@@ -3872,9 +3999,387 @@ export function AdminDashboard() {
                         <span>50/day</span>
                         <span>100/day</span>
                       </div>
+
+                      {/* Warmup controls */}
+                      {warmupData.find(w => w.id === acc.id) && (() => {
+                        const wd = warmupData.find(w => w.id === acc.id)!;
+                        return (
+                          <div className="mt-4 pt-4 border-t border-white/5">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <p className="text-sm font-medium">Email Warmup</p>
+                                <p className="text-[11px] text-gray-500">Sends warmup emails between your accounts to build reputation</p>
+                              </div>
+                              <button
+                                onClick={async () => {
+                                  await fetch('/api/admin/warmup', {
+                                    method: 'PATCH',
+                                    headers: headers(),
+                                    body: JSON.stringify({ id: acc.id, warmupEnabled: !wd.warmupEnabled }),
+                                  });
+                                  fetchWarmupData();
+                                  fetchAccounts();
+                                }}
+                                className={`relative w-11 h-6 rounded-full transition-colors ${wd.warmupEnabled ? 'bg-green-500' : 'bg-white/10'}`}
+                              >
+                                <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${wd.warmupEnabled ? 'translate-x-5' : ''}`} />
+                              </button>
+                            </div>
+                            {wd.warmupEnabled && (
+                              <div className="grid grid-cols-3 gap-3 text-xs">
+                                <div className="rounded-lg bg-white/[0.03] p-3 text-center">
+                                  <p className="text-gray-500 mb-1">Daily Warmup</p>
+                                  <p className="text-lg font-bold text-orange-400">{wd.warmupDaily}</p>
+                                </div>
+                                <div className="rounded-lg bg-white/[0.03] p-3 text-center">
+                                  <p className="text-gray-500 mb-1">Inbox Rate</p>
+                                  <p className={`text-lg font-bold ${wd.stats.inboxRate >= 80 ? 'text-green-400' : wd.stats.inboxRate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{wd.stats.inboxRate}%</p>
+                                </div>
+                                <div className="rounded-lg bg-white/[0.03] p-3 text-center">
+                                  <p className="text-gray-500 mb-1">Total Warmup</p>
+                                  <p className="text-lg font-bold text-blue-400">{wd.stats.totalWarmupSent}</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))}
                 </>
+              )}
+            </div>
+          )}
+
+          {/* ── DOMAINS TAB ── */}
+          {tab === 'domains' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">Domain Manager</h2>
+                  <p className="text-sm text-gray-500 mt-1">Configure DNS records for your sending domains — SPF, DKIM, DMARC</p>
+                </div>
+                <button
+                  onClick={() => { setNewDomainName(''); setShowAddDomain(true); }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-medium"
+                >
+                  + Add Domain
+                </button>
+              </div>
+
+              {domains.length === 0 ? (
+                <div className="text-center py-16 rounded-2xl bg-white/[0.02] border border-white/5">
+                  <p className="text-gray-500 mb-2">No domains added yet</p>
+                  <p className="text-xs text-gray-600">Add your sending domains to generate DNS records and verify setup</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {domains.map(domain => {
+                    const checkResult = domain.lastCheckResult ? JSON.parse(domain.lastCheckResult) : null;
+                    return (
+                      <div key={domain.id} className="rounded-2xl bg-white/[0.02] border border-white/5 p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <h3 className="font-semibold text-lg">{domain.name}</h3>
+                            <span className={`text-xs px-2.5 py-1 rounded-full ${domain.verified ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
+                              {domain.verified ? 'Verified' : 'Not Verified'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={async () => {
+                                showToast('success', 'Checking DNS records...');
+                                const res = await fetch('/api/admin/domains', {
+                                  method: 'POST',
+                                  headers: headers(),
+                                  body: JSON.stringify({ action: 'check', domainId: domain.id }),
+                                });
+                                const data = await res.json();
+                                if (res.ok) {
+                                  setDnsCheckResult(data.results);
+                                  showToast(data.allPass ? 'success' : 'error', data.allPass ? 'All DNS records verified!' : 'Some records missing — check below');
+                                  fetchDomains();
+                                }
+                              }}
+                              className="px-4 py-2 rounded-xl bg-blue-500/10 text-blue-400 text-sm hover:bg-blue-500/20"
+                            >
+                              Check DNS
+                            </button>
+                            {!domain.dkimPublicKey && (
+                              <button
+                                onClick={async () => {
+                                  const res = await fetch('/api/admin/domains', {
+                                    method: 'POST',
+                                    headers: headers(),
+                                    body: JSON.stringify({ action: 'generateDKIM', domainId: domain.id }),
+                                  });
+                                  if (res.ok) {
+                                    showToast('success', 'DKIM keys generated — add the TXT record to your DNS');
+                                    fetchDomains();
+                                  }
+                                }}
+                                className="px-4 py-2 rounded-xl bg-orange-500/10 text-orange-400 text-sm hover:bg-orange-500/20"
+                              >
+                                Generate DKIM
+                              </button>
+                            )}
+                            <button
+                              onClick={async () => {
+                                const res = await fetch('/api/admin/domains', {
+                                  method: 'POST',
+                                  headers: headers(),
+                                  body: JSON.stringify({ action: 'getRecords', domainId: domain.id }),
+                                });
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  setDnsRecords(data.records);
+                                }
+                              }}
+                              className="px-4 py-2 rounded-xl bg-white/[0.03] border border-white/5 text-gray-400 text-sm hover:border-white/10"
+                            >
+                              Show Records
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (!confirm(`Delete domain ${domain.name}?`)) return;
+                                await fetch(`/api/admin/domains?id=${domain.id}`, { method: 'DELETE', headers: headers() });
+                                fetchDomains();
+                              }}
+                              className="p-2 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400"
+                            >
+                              <IconTrash />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* DNS check results */}
+                        {checkResult && (
+                          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                            {['spf', 'dkim', 'dmarc', 'mx'].map(key => {
+                              const r = checkResult[key];
+                              if (!r) return null;
+                              return (
+                                <div key={key} className={`rounded-xl p-3 border ${r.status === 'pass' ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className={`w-2 h-2 rounded-full ${r.status === 'pass' ? 'bg-green-500' : 'bg-red-500'}`} />
+                                    <span className="text-xs font-medium uppercase">{key}</span>
+                                  </div>
+                                  <p className="text-[10px] text-gray-500 truncate">{r.found}</p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {domain.lastCheckAt && (
+                          <p className="text-[10px] text-gray-600 mt-3">Last checked: {new Date(domain.lastCheckAt).toLocaleString()}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* DNS Records modal */}
+              {dnsRecords && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setDnsRecords(null)}>
+                  <div className="w-full max-w-2xl bg-[#161616] border border-white/10 rounded-2xl p-6 shadow-2xl max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                    <h3 className="font-semibold text-lg mb-4">DNS Records to Configure</h3>
+                    <p className="text-xs text-gray-500 mb-4">Add these records in your domain registrar&apos;s DNS settings (GoDaddy, Namecheap, Cloudflare, etc.)</p>
+                    <div className="space-y-4">
+                      {Object.entries(dnsRecords).map(([key, record]) => (
+                        <div key={key} className="rounded-xl bg-white/[0.02] border border-white/5 p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs font-medium text-orange-400 uppercase">{key}</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-gray-400">{record.type}</span>
+                          </div>
+                          <div className="space-y-1.5 text-xs">
+                            <div><span className="text-gray-500">Host:</span> <code className="text-blue-400 bg-blue-500/5 px-1.5 py-0.5 rounded">{record.host}</code></div>
+                            <div>
+                              <span className="text-gray-500">Value:</span>
+                              <code className="block mt-1 text-green-400 bg-green-500/5 px-2 py-1.5 rounded break-all text-[11px]">{record.value}</code>
+                            </div>
+                            <p className="text-gray-600 text-[10px] mt-1">{record.description}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={() => setDnsRecords(null)} className="w-full mt-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-gray-400 text-sm">Close</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Add domain modal */}
+              {showAddDomain && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowAddDomain(false)}>
+                  <div className="w-full max-w-md bg-[#161616] border border-white/10 rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+                    <h3 className="font-semibold text-lg mb-4">Add Sending Domain</h3>
+                    <input
+                      placeholder="e.g. outreach.yourdomain.com"
+                      value={newDomainName}
+                      onChange={e => setNewDomainName(e.target.value)}
+                      className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30 mb-4"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          if (!newDomainName.trim()) { showToast('error', 'Enter a domain name'); return; }
+                          const res = await fetch('/api/admin/domains', {
+                            method: 'POST',
+                            headers: headers(),
+                            body: JSON.stringify({ name: newDomainName.trim() }),
+                          });
+                          const data = await res.json();
+                          if (res.ok) {
+                            showToast('success', 'Domain added — configure DNS records next');
+                            setShowAddDomain(false);
+                            setDnsRecords(data.records);
+                            fetchDomains();
+                          } else {
+                            showToast('error', data.error);
+                          }
+                        }}
+                        className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold text-sm"
+                      >
+                        Add Domain
+                      </button>
+                      <button onClick={() => setShowAddDomain(false)} className="px-6 py-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-gray-400 text-sm">Cancel</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── INBOX TAB ── */}
+          {tab === 'inbox' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">Unified Inbox</h2>
+                  <p className="text-sm text-gray-500 mt-1">{inboxUnread > 0 ? `${inboxUnread} unread` : 'All caught up'} — replies auto-detected and lead status updated</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={async () => {
+                      showToast('success', 'Checking inboxes for new replies...');
+                      const res = await fetch('/api/cron/check-replies', { headers: headers() });
+                      const data = await res.json();
+                      if (res.ok) {
+                        showToast('success', data.message);
+                        fetchInbox(1, inboxFilter);
+                      }
+                    }}
+                    className="px-4 py-2 rounded-xl bg-blue-500/10 text-blue-400 text-sm hover:bg-blue-500/20"
+                  >
+                    Check Now
+                  </button>
+                  {inboxUnread > 0 && (
+                    <button
+                      onClick={async () => {
+                        await fetch('/api/admin/inbox', {
+                          method: 'PATCH',
+                          headers: headers(),
+                          body: JSON.stringify({ action: 'markAllRead' }),
+                        });
+                        fetchInbox(1, inboxFilter);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-white/[0.03] border border-white/5 text-gray-400 text-sm hover:border-white/10"
+                    >
+                      Mark All Read
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Filters */}
+              <div className="flex gap-2">
+                {[
+                  { value: 'all', label: 'All' },
+                  { value: 'unread', label: 'Unread' },
+                  { value: 'replies', label: 'Real Replies' },
+                  { value: 'auto', label: 'Auto-Replies' },
+                ].map(f => (
+                  <button
+                    key={f.value}
+                    onClick={() => { setInboxFilter(f.value); setInboxPage(1); fetchInbox(1, f.value); }}
+                    className={`px-4 py-2 rounded-xl text-sm transition-all ${
+                      inboxFilter === f.value
+                        ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                        : 'bg-white/[0.02] text-gray-400 border border-white/5 hover:border-white/10'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              {inboxMessages.length === 0 ? (
+                <div className="text-center py-16 rounded-2xl bg-white/[0.02] border border-white/5">
+                  <p className="text-gray-500 mb-2">No messages yet</p>
+                  <p className="text-xs text-gray-600">Configure IMAP on your accounts and click &quot;Check Now&quot; to fetch replies</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {inboxMessages.map(msg => (
+                    <div
+                      key={msg.id}
+                      className={`rounded-xl border p-4 transition-all ${
+                        msg.read ? 'bg-white/[0.01] border-white/5' : 'bg-white/[0.03] border-orange-500/20'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            {!msg.read && <span className="w-2 h-2 rounded-full bg-orange-500 flex-shrink-0" />}
+                            <span className="font-medium text-sm truncate">{msg.fromEmail}</span>
+                            {msg.isAutoReply && <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400">Auto-Reply</span>}
+                            {msg.isOOO && <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400">OOO</span>}
+                            {msg.leadId && <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-400">Lead Match</span>}
+                          </div>
+                          <p className="text-sm text-gray-300 mb-1">{msg.subject}</p>
+                          <p className="text-xs text-gray-500 line-clamp-2">{msg.bodyPreview}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                          <span className="text-[10px] text-gray-500">{new Date(msg.receivedAt).toLocaleString()}</span>
+                          <button
+                            onClick={async () => {
+                              await fetch('/api/admin/inbox', {
+                                method: 'PATCH',
+                                headers: headers(),
+                                body: JSON.stringify({
+                                  action: msg.read ? 'markUnread' : 'markRead',
+                                  [msg.read ? 'messageId' : 'messageIds']: msg.read ? msg.id : [msg.id],
+                                }),
+                              });
+                              fetchInbox(inboxPage, inboxFilter);
+                            }}
+                            className="text-[10px] text-gray-500 hover:text-orange-400"
+                          >
+                            {msg.read ? 'Mark Unread' : 'Mark Read'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Pagination */}
+                  {inboxPages > 1 && (
+                    <div className="flex justify-center gap-2 pt-4">
+                      {Array.from({ length: inboxPages }, (_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => { setInboxPage(i + 1); fetchInbox(i + 1, inboxFilter); }}
+                          className={`w-8 h-8 rounded-lg text-xs ${
+                            inboxPage === i + 1 ? 'bg-orange-500 text-white' : 'bg-white/[0.03] text-gray-400 hover:bg-white/5'
+                          }`}
+                        >
+                          {i + 1}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}

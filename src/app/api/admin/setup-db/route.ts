@@ -201,6 +201,98 @@ export async function POST(req: NextRequest) {
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "LeadListMember_leadId_idx" ON "LeadListMember"("leadId")`);
     results.push('LeadListMember table ready');
 
+    // ── New columns on SendingAccount ──
+    await prisma.$executeRawUnsafe(`ALTER TABLE "SendingAccount" ADD COLUMN IF NOT EXISTS "imapHost" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "SendingAccount" ADD COLUMN IF NOT EXISTS "imapPort" INTEGER NOT NULL DEFAULT 993`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "SendingAccount" ADD COLUMN IF NOT EXISTS "imapUser" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "SendingAccount" ADD COLUMN IF NOT EXISTS "imapPass" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "SendingAccount" ADD COLUMN IF NOT EXISTS "sendWindowStart" INTEGER NOT NULL DEFAULT 8`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "SendingAccount" ADD COLUMN IF NOT EXISTS "sendWindowEnd" INTEGER NOT NULL DEFAULT 18`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "SendingAccount" ADD COLUMN IF NOT EXISTS "sendWeekdays" TEXT NOT NULL DEFAULT '1,2,3,4,5'`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "SendingAccount" ADD COLUMN IF NOT EXISTS "warmupEnabled" BOOLEAN NOT NULL DEFAULT false`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "SendingAccount" ADD COLUMN IF NOT EXISTS "warmupDaily" INTEGER NOT NULL DEFAULT 5`);
+    results.push('SendingAccount new columns ready');
+
+    // ── Domain table ──
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Domain" (
+        "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+        "name" TEXT NOT NULL,
+        "spfRecord" TEXT,
+        "dkimSelector" TEXT NOT NULL DEFAULT 'blok',
+        "dkimPublicKey" TEXT,
+        "dkimPrivateKey" TEXT,
+        "dmarcRecord" TEXT,
+        "verified" BOOLEAN NOT NULL DEFAULT false,
+        "lastCheckAt" TIMESTAMP(3),
+        "lastCheckResult" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "Domain_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Domain_name_key" ON "Domain"("name")`);
+    results.push('Domain table ready');
+
+    // ── InboxMessage table ──
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "InboxMessage" (
+        "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+        "accountId" TEXT NOT NULL,
+        "leadId" TEXT,
+        "fromEmail" TEXT NOT NULL,
+        "toEmail" TEXT NOT NULL,
+        "subject" TEXT NOT NULL,
+        "bodyPreview" TEXT NOT NULL,
+        "messageId" TEXT NOT NULL,
+        "isAutoReply" BOOLEAN NOT NULL DEFAULT false,
+        "isOOO" BOOLEAN NOT NULL DEFAULT false,
+        "read" BOOLEAN NOT NULL DEFAULT false,
+        "receivedAt" TIMESTAMP(3) NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "InboxMessage_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "InboxMessage_messageId_key" ON "InboxMessage"("messageId")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "InboxMessage_accountId_idx" ON "InboxMessage"("accountId")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "InboxMessage_leadId_idx" ON "InboxMessage"("leadId")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "InboxMessage_receivedAt_idx" ON "InboxMessage"("receivedAt")`);
+    results.push('InboxMessage table ready');
+
+    // ── WarmupLog table ──
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "WarmupLog" (
+        "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+        "accountId" TEXT NOT NULL,
+        "date" TEXT NOT NULL,
+        "sent" INTEGER NOT NULL DEFAULT 0,
+        "received" INTEGER NOT NULL DEFAULT 0,
+        "inbox" INTEGER NOT NULL DEFAULT 0,
+        "spam" INTEGER NOT NULL DEFAULT 0,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "WarmupLog_pkey" PRIMARY KEY ("id"),
+        CONSTRAINT "WarmupLog_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "SendingAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "WarmupLog_accountId_date_key" ON "WarmupLog"("accountId", "date")`);
+    results.push('WarmupLog table ready');
+
+    // ── AuditLog table ──
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "AuditLog" (
+        "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+        "action" TEXT NOT NULL,
+        "details" TEXT,
+        "ipAddress" TEXT,
+        "userAgent" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AuditLog_action_idx" ON "AuditLog"("action")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AuditLog_createdAt_idx" ON "AuditLog"("createdAt")`);
+    results.push('AuditLog table ready');
+
     return NextResponse.json({ success: true, results });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);

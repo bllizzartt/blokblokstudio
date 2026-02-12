@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { prisma } from './prisma';
+import { decrypt } from './crypto';
 
 interface SendingAccountData {
   id: string;
@@ -53,7 +54,7 @@ export async function sendViaSMTP(
     secure: account.smtpPort === 465,
     auth: {
       user: account.smtpUser,
-      pass: account.smtpPass,
+      pass: decrypt(account.smtpPass), // Decrypt from AES-256-GCM
     },
   });
 
@@ -178,9 +179,12 @@ export async function checkBounceThreshold(campaignId: string): Promise<boolean>
 
 /**
  * Pick the next available sending account using round-robin.
+ * Respects send windows and weekday restrictions.
  */
 export async function getNextAccount(): Promise<SendingAccountData | null> {
   const today = new Date().toISOString().slice(0, 10);
+  const nowHour = new Date().getUTCHours();
+  const dayOfWeek = new Date().getUTCDay();
 
   const accounts = await prisma.sendingAccount.findMany({
     where: { active: true },
@@ -189,7 +193,19 @@ export async function getNextAccount(): Promise<SendingAccountData | null> {
 
   if (accounts.length === 0) return null;
 
-  for (const account of accounts) {
+  for (const acct of accounts) {
+    const account = acct as typeof acct & { sendWindowStart?: number; sendWindowEnd?: number; sendWeekdays?: string };
+
+    // Check send window (skip accounts outside their window)
+    if (typeof account.sendWindowStart === 'number' && typeof account.sendWindowEnd === 'number') {
+      if (nowHour < account.sendWindowStart || nowHour >= account.sendWindowEnd) continue;
+    }
+    if (account.sendWeekdays) {
+      const allowedDays = account.sendWeekdays.split(',').map(d => parseInt(d));
+      if (!allowedDays.includes(dayOfWeek)) continue;
+    }
+
+    // Reset daily counter
     const lastReset = account.lastResetAt.toISOString().slice(0, 10);
     if (lastReset !== today) {
       await prisma.sendingAccount.update({
@@ -199,6 +215,7 @@ export async function getNextAccount(): Promise<SendingAccountData | null> {
       account.sentToday = 0;
     }
 
+    // Auto-advance warmup phase
     const daysSinceStart = Math.floor(
       (Date.now() - account.warmupStart.getTime()) / (1000 * 60 * 60 * 24)
     );

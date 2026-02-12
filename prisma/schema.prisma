@@ -46,17 +46,34 @@ model SendingAccount {
   smtpHost    String
   smtpPort    Int      @default(587)
   smtpUser    String
-  smtpPass    String
+  smtpPass    String   // AES-256-GCM encrypted at rest
   dailyLimit  Int      @default(20)
   sentToday   Int      @default(0)
   lastResetAt DateTime @default(now())
   warmupPhase Int      @default(1)
   warmupStart DateTime @default(now())
   active      Boolean  @default(true)
+
+  // IMAP settings for reply tracking
+  imapHost    String?
+  imapPort    Int      @default(993)
+  imapUser    String?
+  imapPass    String?  // AES-256-GCM encrypted at rest
+
+  // Send window (hours in UTC, e.g. 9-17 = 9am to 5pm)
+  sendWindowStart Int  @default(8)   // UTC hour to start sending
+  sendWindowEnd   Int  @default(18)  // UTC hour to stop sending
+  sendWeekdays    String @default("1,2,3,4,5") // 0=Sun, 1=Mon, etc.
+
+  // Warmup config
+  warmupEnabled Boolean @default(false)
+  warmupDaily   Int     @default(5)  // warmup emails per day
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   dailyLogs SendingLog[]
+  warmupLogs WarmupLog[]
 }
 
 model SendingLog {
@@ -171,4 +188,65 @@ model LeadListMember {
 
   @@unique([listId, leadId])
   @@index([leadId])
+}
+
+model Domain {
+  id          String   @id @default(cuid())
+  name        String   @unique  // e.g. "outreach.example.com"
+  spfRecord   String?
+  dkimSelector String  @default("blok")
+  dkimPublicKey String?
+  dkimPrivateKey String? // AES-256-GCM encrypted
+  dmarcRecord  String?
+  verified    Boolean  @default(false)
+  lastCheckAt DateTime?
+  lastCheckResult String? // JSON: {spf, dkim, dmarc, mx} check results
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model InboxMessage {
+  id          String   @id @default(cuid())
+  accountId   String
+  leadId      String?
+  fromEmail   String
+  toEmail     String
+  subject     String
+  bodyPreview String   // first 500 chars, no sensitive data stored
+  messageId   String   @unique // IMAP message ID for dedup
+  isAutoReply Boolean  @default(false)
+  isOOO       Boolean  @default(false)
+  read        Boolean  @default(false)
+  receivedAt  DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([accountId])
+  @@index([leadId])
+  @@index([receivedAt])
+}
+
+model WarmupLog {
+  id        String   @id @default(cuid())
+  accountId String
+  account   SendingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  date      String
+  sent      Int      @default(0)
+  received  Int      @default(0) // warmup replies received
+  inbox     Int      @default(0) // landed in inbox (not spam)
+  spam      Int      @default(0) // landed in spam
+  createdAt DateTime @default(now())
+
+  @@unique([accountId, date])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String   // login, password_attempt, lead_export, account_create, etc.
+  details   String?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([action])
+  @@index([createdAt])
 }
