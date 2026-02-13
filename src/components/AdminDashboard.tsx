@@ -5457,7 +5457,11 @@ export function AdminDashboard() {
                           });
                           const data = await res.json();
                           if (res.ok) {
-                            showToast('success', 'Domain added — configure DNS records next');
+                            if (data.dnsWarnings && data.dnsWarnings.length > 0) {
+                              showToast('error', `Domain added but ${data.dnsWarnings.length} DNS record(s) missing — configure them now!`);
+                            } else {
+                              showToast('success', 'Domain added — DNS looks good!');
+                            }
                             setShowAddDomain(false);
                             setDnsRecords(data.records);
                             fetchDomains();

@@ -63,13 +63,29 @@ async function checkDomainDNS(domainName: string, dkimSelector: string) {
 }
 
 // ── Generate recommended DNS records ──
+// VPS IP and mail hostname from env, with Hetzner/Mailcow defaults
+const VPS_IP = process.env.VPS_IP || process.env.MAILCOW_IP || '46.225.131.150';
+const MAIL_HOSTNAME = process.env.MAILCOW_HOST || 'mail.blokblokstudio.com';
+
 function generateDNSRecords(domainName: string, dkimSelector: string, dkimPublicKey?: string) {
   return {
+    a_mail: {
+      type: 'A',
+      host: 'mail',
+      value: VPS_IP,
+      description: `Points mail.${domainName} to your Mailcow VPS — required for email delivery`,
+    },
+    mx: {
+      type: 'MX',
+      host: '@',
+      value: `10 ${MAIL_HOSTNAME}`,
+      description: 'Routes incoming email (bounces & replies) to your Mailcow server',
+    },
     spf: {
       type: 'TXT',
       host: '@',
-      value: `v=spf1 include:_spf.google.com include:sendgrid.net ~all`,
-      description: 'Authorizes your mail servers to send email for this domain',
+      value: `v=spf1 ip4:${VPS_IP} -all`,
+      description: `Authorizes your VPS (${VPS_IP}) as the only server allowed to send email for this domain`,
     },
     dkim: {
       type: 'TXT',
@@ -82,14 +98,8 @@ function generateDNSRecords(domainName: string, dkimSelector: string, dkimPublic
     dmarc: {
       type: 'TXT',
       host: '_dmarc',
-      value: `v=DMARC1; p=none; rua=mailto:dmarc@${domainName}; pct=100`,
-      description: 'Tells receiving servers what to do with failed SPF/DKIM checks',
-    },
-    mx: {
-      type: 'MX',
-      host: '@',
-      value: '10 mail.' + domainName,
-      description: 'Points incoming email to your mail server',
+      value: `v=DMARC1; p=quarantine; rua=mailto:dmarc@${domainName}; pct=100`,
+      description: 'Tells receiving servers to quarantine emails that fail SPF/DKIM — protects your reputation',
     },
   };
 }
@@ -133,8 +143,44 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      // Auto-check DNS on creation so user immediately sees what's missing
       const records = generateDNSRecords(cleanName, domain.dkimSelector);
-      return NextResponse.json({ success: true, domain, records });
+      const check = await checkDomainDNS(cleanName, domain.dkimSelector);
+
+      // Build warnings for missing critical records
+      const dnsWarnings: string[] = [];
+      if (check.results.mx?.status !== 'pass') {
+        dnsWarnings.push(`MX record missing — add: ${records.mx.value}`);
+      }
+      if (check.results.spf?.status !== 'pass') {
+        dnsWarnings.push(`SPF record missing — add TXT: ${records.spf.value}`);
+      }
+      if (check.results.dkim?.status !== 'pass') {
+        dnsWarnings.push('DKIM not set up — generate DKIM keys and add the TXT record');
+      }
+      if (check.results.dmarc?.status !== 'pass') {
+        dnsWarnings.push(`DMARC record missing — add TXT at _dmarc: ${records.dmarc.value}`);
+      }
+
+      // Check if mail.{domain} A record exists
+      let mailARecord = false;
+      try {
+        const resolve4 = (await import('util')).promisify(dns.resolve4);
+        const ips = await resolve4(`mail.${cleanName}`);
+        mailARecord = ips.length > 0;
+      } catch { /* no A record */ }
+      if (!mailARecord) {
+        dnsWarnings.push(`A record missing for mail.${cleanName} — point it to ${VPS_IP}`);
+      }
+
+      return NextResponse.json({
+        success: true,
+        domain,
+        records,
+        dnsCheck: check,
+        dnsWarnings: dnsWarnings.length > 0 ? dnsWarnings : null,
+        dnsReady: dnsWarnings.length === 0,
+      });
     }
 
     // Check DNS records
