@@ -51,6 +51,11 @@ model Lead {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([lastEmailAt])         // Frequency cap checks
+  @@index([engagementScore])     // Engagement tier queries
+  @@index([status])              // Pipeline filtering
+  @@index([verifyResult])        // Eligibility filtering
 }
 
 model SendingAccount {
@@ -100,6 +105,7 @@ model SendingLog {
   createdAt DateTime @default(now())
 
   @@unique([accountId, date])
+  @@index([date]) // Snapshot and trend queries
 }
 
 model EmailCampaign {
@@ -182,6 +188,8 @@ model EmailEvent {
   @@index([leadId])
   @@index([campaignId])
   @@index([type])
+  @@index([accountId, type, createdAt]) // Warmup phase gating queries
+  @@index([createdAt])                  // Daily snapshot aggregation
 }
 
 model LeadList {
@@ -280,6 +288,7 @@ model SoftBounceQueue {
 
   @@index([nextRetry])
   @@index([leadId])
+  @@index([retries, nextRetry]) // Retry processor query optimization
 }
 
 model DeliverabilitySnapshot {

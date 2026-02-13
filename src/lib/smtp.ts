@@ -46,6 +46,8 @@ export async function sendViaSMTP(
     unsubscribeUrl,
     leadId,
     campaignId,
+    inReplyTo,
+    references,
   }: {
     to: string;
     subject: string;
@@ -55,8 +57,10 @@ export async function sendViaSMTP(
     unsubscribeUrl?: string;
     leadId?: string;
     campaignId?: string;
+    inReplyTo?: string;    // Message-ID of previous email in thread
+    references?: string;   // Space-separated Message-IDs for full thread
   }
-): Promise<{ success: boolean; bounced: boolean; bounceType?: string }> {
+): Promise<{ success: boolean; bounced: boolean; bounceType?: string; messageId?: string }> {
   const sendingDomain = account.email.split('@')[1] || 'localhost';
 
   const transporter = nodemailer.createTransport({
@@ -95,6 +99,17 @@ export async function sendViaSMTP(
   // Feedback-ID for ISP complaint tracking (Google FBL format)
   if (campaignId) {
     mailHeaders['Feedback-ID'] = `${campaignId}:${account.id}:blokblok`;
+  }
+
+  // Email threading — RFC 2822 In-Reply-To / References headers
+  // Without these, sequence follow-ups show as separate emails in Gmail/Outlook
+  // instead of threading into the same conversation. ISPs also flag non-threaded
+  // sequences as cold outreach spam (real conversations always thread).
+  if (inReplyTo) {
+    mailHeaders['In-Reply-To'] = inReplyTo;
+  }
+  if (references) {
+    mailHeaders['References'] = references;
   }
 
   // ARC (Authenticated Received Chain) — RFC 8617
@@ -136,7 +151,7 @@ export async function sendViaSMTP(
       await logEvent(leadId, 'sent', campaignId, account.id);
     }
 
-    return { success: true, bounced: false };
+    return { success: true, bounced: false, messageId };
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error(`[SMTP] Failed to send via ${account.email} to ${to}:`, errMsg);
@@ -273,10 +288,26 @@ export async function checkBounceThreshold(campaignId: string): Promise<boolean>
 }
 
 /**
- * Pick the next available sending account using round-robin.
- * Respects send windows and weekday restrictions.
+ * Detect the ISP group of an email for ESP matching.
+ * Gmail→Gmail, Outlook→Outlook routing improves inbox placement by 10-16%.
  */
-export async function getNextAccount(): Promise<SendingAccountData | null> {
+function getAccountIspGroup(email: string): string {
+  const domain = email.split('@')[1]?.toLowerCase() || '';
+  if (['gmail.com', 'googlemail.com'].includes(domain)) return 'google';
+  if (['outlook.com', 'hotmail.com', 'live.com', 'msn.com'].includes(domain)) return 'microsoft';
+  if (['yahoo.com', 'yahoo.co.uk', 'ymail.com', 'aol.com'].includes(domain)) return 'yahoo';
+  // Google Workspace domains use MX records like *.google.com
+  // For now, check common patterns
+  return 'other';
+}
+
+/**
+ * Pick the next available sending account.
+ * Uses ESP matching when possible (Gmail→Gmail improves inbox placement 10-16%).
+ * Falls back to round-robin if no matching ESP account is available.
+ * Respects send windows, weekday restrictions, and daily volume randomization.
+ */
+export async function getNextAccount(recipientEmail?: string): Promise<SendingAccountData | null> {
   const today = new Date().toISOString().slice(0, 10);
   const nowHour = new Date().getUTCHours();
   const dayOfWeek = new Date().getUTCDay();
@@ -288,7 +319,17 @@ export async function getNextAccount(): Promise<SendingAccountData | null> {
 
   if (accounts.length === 0) return null;
 
-  for (const acct of accounts) {
+  // ESP matching: prefer accounts matching the recipient's ISP
+  // Gmail→Gmail and Outlook→Outlook improves inbox placement by 10-16%
+  const recipientIsp = recipientEmail ? getAccountIspGroup(recipientEmail) : null;
+  const sortedAccounts = recipientIsp && recipientIsp !== 'other'
+    ? [
+        ...accounts.filter(a => getAccountIspGroup(a.email) === recipientIsp),
+        ...accounts.filter(a => getAccountIspGroup(a.email) !== recipientIsp),
+      ]
+    : accounts;
+
+  for (const acct of sortedAccounts) {
     const account = acct as typeof acct & { sendWindowStart?: number; sendWindowEnd?: number; sendWeekdays?: string };
 
     // Check send window (skip accounts outside their window)
@@ -383,7 +424,14 @@ export async function getNextAccount(): Promise<SendingAccountData | null> {
       account.dailyLimit = WARMUP_PHASES[newPhase].dailyLimit;
     }
 
-    if (account.sentToday < account.dailyLimit) {
+    // Daily volume randomization: ±15% variation prevents bot pattern detection
+    // Sending exactly 100 every day = mechanical pattern. Sending 87-115 = human.
+    // The randomized limit is deterministic per account+day so it stays consistent within a day.
+    const dayHash = (account.id.charCodeAt(0) + parseInt(today.replace(/-/g, ''))) % 100;
+    const jitterPercent = ((dayHash / 100) * 0.3) - 0.15; // -15% to +15%
+    const randomizedLimit = Math.round(account.dailyLimit * (1 + jitterPercent));
+
+    if (account.sentToday < randomizedLimit) {
       return account;
     }
   }

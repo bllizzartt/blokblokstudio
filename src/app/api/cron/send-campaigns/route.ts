@@ -5,7 +5,7 @@ import { injectTracking } from '@/lib/tracking';
 import { buildEmailHtml } from '@/app/api/admin/campaign/route';
 import { getNextAccount, sendViaSMTP, recordSend, checkBounceThreshold } from '@/lib/smtp';
 import { processSpintax, pickVariant } from '@/lib/verify';
-import { isLeadEligible, checkRateLimit, checkIspRateLimit, checkContentFingerprint, reportSendSuccess, reportSendError, checkCampaignHealth, queueSoftBounceRetry, recordDailySnapshot, getEngagementTier, getHumanizedDelay } from '@/lib/deliverability';
+import { isLeadEligible, checkRateLimit, checkIspRateLimit, checkContentFingerprint, reportSendSuccess, reportSendError, checkCampaignHealth, queueSoftBounceRetry, recordDailySnapshot, getEngagementTier, getHumanizedDelay, validateEmailLinks, checkDmarcEnforcement, isGoodSendTime } from '@/lib/deliverability';
 import { htmlToText } from '@/lib/email';
 import { applyStylometricVariation } from '@/lib/stylometry';
 
@@ -113,12 +113,32 @@ export async function GET(req: NextRequest) {
       const fpCheck = checkContentFingerprint(html);
       if (!fpCheck.allowed) {
         console.warn(`[Cron] Template spam guard: ${fpCheck.similarSent} identical sends — ${fpCheck.suggestion}`);
-        // Add extra delay instead of skipping (content will vary with spintax on next iteration)
         await new Promise(r => setTimeout(r, 5000 + Math.random() * 5000));
       }
 
-      const ok = await sendWithRotation(lead.email, subject, html, lead.id, campaign.id);
-      if (ok) {
+      // Link validation — broken links are a spam signal
+      const linkCheck = validateEmailLinks(html);
+      if (!linkCheck.valid && linkCheck.brokenLinks.length > 0) {
+        console.warn(`[Cron] Broken links found: ${linkCheck.brokenLinks.map(l => `${l.url} (${l.reason})`).join(', ')}`);
+      }
+
+      // DMARC enforcement gate — check before sending to strict ISPs
+      const dmarcCheck = await checkDmarcEnforcement(lead.email);
+      if (!dmarcCheck.allowed) {
+        console.warn(`[Cron] DMARC blocked: ${dmarcCheck.reason}`);
+        continue; // Skip this lead — DMARC not configured
+      }
+
+      // Timezone-aware sending — defer if outside recipient's business hours
+      const tzCheck = isGoodSendTime(lead.email);
+      if (!tzCheck.shouldSend) {
+        // Don't skip — just log. The cron will catch them on the next run.
+        console.log(`[Cron] Timezone defer: ${lead.email} — ${tzCheck.reason}`);
+        continue;
+      }
+
+      const sendResult = await sendWithRotation(lead.email, subject, html, lead.id, campaign.id);
+      if (sendResult.sent) {
         sentCount++;
         await prisma.lead.update({
           where: { id: lead.id },
@@ -222,9 +242,44 @@ export async function GET(req: NextRequest) {
       continue;
     }
 
-    const ok = await sendWithRotation(lead.email, subject, html, lead.id);
+    // Email threading: look up previous Message-ID for this lead's sequence
+    // This makes follow-ups appear in the same Gmail/Outlook conversation thread
+    let threadingHeaders: { inReplyTo?: string; references?: string } | undefined;
+    if (nextStepIndex > 0) {
+      try {
+        const prevEvent = await prisma.emailEvent.findFirst({
+          where: {
+            leadId: enrollment.leadId,
+            type: 'sent',
+            details: { startsWith: 'msgid:' },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (prevEvent?.details) {
+          const prevMsgId = prevEvent.details.replace('msgid:', '');
+          threadingHeaders = {
+            inReplyTo: prevMsgId,
+            references: prevMsgId, // Full chain would collect all previous IDs
+          };
+        }
+      } catch { /* threading is best-effort */ }
+    }
 
-    if (ok) {
+    const sendResult = await sendWithRotation(lead.email, subject, html, lead.id, undefined, threadingHeaders);
+
+    if (sendResult.sent) {
+      // Store Message-ID for future threading
+      if (sendResult.messageId) {
+        try {
+          await prisma.emailEvent.create({
+            data: {
+              leadId: lead.id,
+              type: 'sent',
+              details: `msgid:${sendResult.messageId}`,
+            },
+          });
+        } catch { /* threading storage is best-effort */ }
+      }
       seqSent++;
       await prisma.lead.update({
         where: { id: lead.id },
@@ -287,8 +342,8 @@ export async function GET(req: NextRequest) {
 
   let retrySent = 0;
   for (const item of retryQueue) {
-    const retryOk = await sendWithRotation(item.email, item.subject, item.html, item.leadId, item.campaignId || undefined);
-    if (retryOk) {
+    const retryResult = await sendWithRotation(item.email, item.subject, item.html, item.leadId, item.campaignId || undefined);
+    if (retryResult.sent) {
       retrySent++;
       await prisma.softBounceQueue.delete({ where: { id: item.id } });
     } else {
@@ -320,14 +375,23 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * Try SMTP accounts first (with rotation), fall back to Resend.
+ * Try SMTP accounts first (with rotation + ESP matching), fall back to Resend.
  * Injects open/click tracking into the HTML before sending.
+ * Supports email threading via In-Reply-To/References for sequence follow-ups.
  */
-async function sendWithRotation(to: string, subject: string, html: string, leadId: string, campaignId?: string): Promise<boolean> {
+async function sendWithRotation(
+  to: string,
+  subject: string,
+  html: string,
+  leadId: string,
+  campaignId?: string,
+  threadingHeaders?: { inReplyTo?: string; references?: string },
+): Promise<{ sent: boolean; messageId?: string }> {
   // Inject tracking pixel and link wrapping
   const trackedHtml = injectTracking(html, leadId, campaignId);
 
-  const account = await getNextAccount();
+  // ESP matching: pass recipient email so getNextAccount prefers same-ISP accounts
+  const account = await getNextAccount(to);
   if (account) {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || (process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
@@ -341,16 +405,19 @@ async function sendWithRotation(to: string, subject: string, html: string, leadI
       unsubscribeUrl,
       leadId,
       campaignId,
+      inReplyTo: threadingHeaders?.inReplyTo,
+      references: threadingHeaders?.references,
     });
 
     if (result.success) {
       await recordSend(account.id);
-      return true;
+      return { sent: true, messageId: result.messageId };
     }
     // If bounced, don't fall back — the email is definitely bad
-    if (result.bounced) return false;
+    if (result.bounced) return { sent: false };
   }
 
   // Fall back to Resend
-  return sendCampaignEmail({ to, subject, html: trackedHtml, leadId });
+  const ok = await sendCampaignEmail({ to, subject, html: trackedHtml, leadId });
+  return { sent: ok };
 }

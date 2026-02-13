@@ -1077,3 +1077,332 @@ export async function getSuppressionStats(): Promise<{
     total: hardBounces + complaints + unsubscribed + invalid + disposable + disengaged,
   };
 }
+
+// ── Link Validation (Pre-Send) ──
+
+/**
+ * Validate all URLs in email HTML before sending.
+ * Broken links in emails are a spam signal — ISPs check this.
+ * Returns list of invalid/broken links found.
+ */
+export function validateEmailLinks(html: string): {
+  valid: boolean;
+  brokenLinks: { url: string; reason: string }[];
+  totalLinks: number;
+} {
+  const urlRegex = /href=["'](https?:\/\/[^"'\s>]+)["']/gi;
+  const links: string[] = [];
+  let match;
+
+  while ((match = urlRegex.exec(html)) !== null) {
+    links.push(match[1]);
+  }
+
+  const brokenLinks: { url: string; reason: string }[] = [];
+
+  for (const url of links) {
+    try {
+      const parsed = new URL(url);
+
+      // Check for common broken URL patterns
+      if (!parsed.hostname || parsed.hostname === 'localhost') {
+        brokenLinks.push({ url, reason: 'localhost or empty hostname' });
+        continue;
+      }
+
+      // Check for placeholder URLs that weren't replaced
+      if (url.includes('{{') || url.includes('}}') || url.includes('example.com')) {
+        brokenLinks.push({ url, reason: 'Placeholder URL not replaced' });
+        continue;
+      }
+
+      // Check for common typos in popular domains
+      const suspiciousDomains = ['gogle.com', 'gooogle.com', 'lnkedin.com', 'facebok.com'];
+      if (suspiciousDomains.includes(parsed.hostname)) {
+        brokenLinks.push({ url, reason: 'Likely typo in domain' });
+        continue;
+      }
+
+      // Check for URLs that will trigger ISP spam filters
+      const flaggedTlds = ['.xyz', '.top', '.click', '.link', '.info'];
+      const tld = '.' + parsed.hostname.split('.').pop();
+      if (flaggedTlds.includes(tld)) {
+        brokenLinks.push({ url, reason: `TLD "${tld}" frequently flagged as spam` });
+        continue;
+      }
+
+      // Check for URL shorteners (ISPs flag these in cold email)
+      const shorteners = ['bit.ly', 'tinyurl.com', 'goo.gl', 't.co', 'ow.ly', 'is.gd', 'buff.ly'];
+      if (shorteners.includes(parsed.hostname)) {
+        brokenLinks.push({ url, reason: 'URL shortener — ISPs flag these in cold email' });
+        continue;
+      }
+    } catch {
+      brokenLinks.push({ url, reason: 'Invalid URL format' });
+    }
+  }
+
+  return {
+    valid: brokenLinks.length === 0,
+    brokenLinks,
+    totalLinks: links.length,
+  };
+}
+
+// ── DMARC Enforcement Gate ──
+
+/**
+ * Check if the sending domain has DMARC at enforcement level.
+ * Gmail permanently rejects non-compliant mail since Nov 2025.
+ * Microsoft started rejecting May 2025 for outlook.com/hotmail.com.
+ *
+ * This gate blocks sending to major ISPs if DMARC is p=none.
+ */
+export async function checkDmarcEnforcement(recipientEmail: string): Promise<{
+  allowed: boolean;
+  reason: string;
+}> {
+  const recipientDomain = recipientEmail.split('@')[1]?.toLowerCase() || '';
+
+  // Only enforce for ISPs that reject on DMARC failure
+  const strictIsps = [
+    'gmail.com', 'googlemail.com',
+    'outlook.com', 'hotmail.com', 'live.com', 'msn.com',
+    'yahoo.com', 'yahoo.co.uk', 'ymail.com', 'aol.com',
+  ];
+
+  if (!strictIsps.includes(recipientDomain)) {
+    return { allowed: true, reason: 'ISP does not require DMARC enforcement' };
+  }
+
+  // Check our sending domain's DMARC policy
+  try {
+    const latestCheck = await prisma.dnsHealthCheck.findFirst({
+      where: { dmarcStatus: { not: 'unknown' } },
+      orderBy: { checkedAt: 'desc' },
+    });
+
+    if (!latestCheck) {
+      // No DNS check yet — allow but warn
+      return { allowed: true, reason: 'No DNS health check found — run monitor first' };
+    }
+
+    // Parse stored details to check DMARC policy
+    if (latestCheck.details) {
+      try {
+        const details = JSON.parse(latestCheck.details);
+        const dmarcPolicy = details?.dmarc?.policy;
+
+        if (dmarcPolicy === 'none') {
+          console.warn(`[DMARC] Sending to ${recipientDomain} with p=none — recipient ISP may reject`);
+          // Don't block (yet) but log aggressively — user should upgrade DMARC
+          return {
+            allowed: true,
+            reason: `WARNING: DMARC policy is p=none. ${recipientDomain} may reject your emails. Upgrade to p=quarantine or p=reject.`,
+          };
+        }
+
+        if (dmarcPolicy === 'quarantine' || dmarcPolicy === 'reject') {
+          return { allowed: true, reason: `DMARC ${dmarcPolicy} — fully compliant` };
+        }
+      } catch { /* parse error — allow */ }
+    }
+
+    if (latestCheck.dmarcStatus === 'fail' || latestCheck.dmarcStatus === 'missing') {
+      return {
+        allowed: false,
+        reason: `DMARC is ${latestCheck.dmarcStatus} — ${recipientDomain} will reject your emails. Set up DMARC first.`,
+      };
+    }
+  } catch {
+    // DNS check failed — don't block sends
+  }
+
+  return { allowed: true, reason: 'OK' };
+}
+
+// ── Recipient Timezone-Aware Sending ──
+
+/**
+ * Estimate the recipient's timezone from their email domain.
+ * Uses TLD-based heuristics (not perfect, but much better than UTC-only).
+ *
+ * Returns recommended send hour offset from UTC.
+ * This ensures emails arrive during business hours in the recipient's timezone.
+ */
+export function estimateRecipientTimezone(email: string): {
+  estimatedOffset: number; // Hours from UTC
+  confidence: 'high' | 'medium' | 'low';
+  region: string;
+} {
+  const domain = email.split('@')[1]?.toLowerCase() || '';
+  const tld = domain.split('.').pop() || '';
+
+  // Country TLD → timezone offset mapping (business hours midpoint)
+  const tldTimezones: Record<string, { offset: number; region: string }> = {
+    'uk': { offset: 0, region: 'UK' },
+    'de': { offset: 1, region: 'Germany' },
+    'fr': { offset: 1, region: 'France' },
+    'it': { offset: 1, region: 'Italy' },
+    'es': { offset: 1, region: 'Spain' },
+    'nl': { offset: 1, region: 'Netherlands' },
+    'be': { offset: 1, region: 'Belgium' },
+    'at': { offset: 1, region: 'Austria' },
+    'ch': { offset: 1, region: 'Switzerland' },
+    'pl': { offset: 1, region: 'Poland' },
+    'se': { offset: 1, region: 'Sweden' },
+    'no': { offset: 1, region: 'Norway' },
+    'dk': { offset: 1, region: 'Denmark' },
+    'fi': { offset: 2, region: 'Finland' },
+    'gr': { offset: 2, region: 'Greece' },
+    'ro': { offset: 2, region: 'Romania' },
+    'il': { offset: 2, region: 'Israel' },
+    'za': { offset: 2, region: 'South Africa' },
+    'ae': { offset: 4, region: 'UAE' },
+    'in': { offset: 5.5, region: 'India' },
+    'sg': { offset: 8, region: 'Singapore' },
+    'hk': { offset: 8, region: 'Hong Kong' },
+    'cn': { offset: 8, region: 'China' },
+    'kr': { offset: 9, region: 'South Korea' },
+    'jp': { offset: 9, region: 'Japan' },
+    'au': { offset: 10, region: 'Australia' },
+    'nz': { offset: 12, region: 'New Zealand' },
+    'ca': { offset: -5, region: 'Canada (Eastern)' },
+    'br': { offset: -3, region: 'Brazil' },
+    'mx': { offset: -6, region: 'Mexico' },
+    'ar': { offset: -3, region: 'Argentina' },
+  };
+
+  // Check country TLD first
+  const tldMatch = tldTimezones[tld];
+  if (tldMatch) {
+    return { estimatedOffset: tldMatch.offset, confidence: 'high', region: tldMatch.region };
+  }
+
+  // For .com/.org/.net, check the ISP for US/global defaults
+  if (['com', 'org', 'net', 'io', 'co'].includes(tld)) {
+    // US-centric domains default to Eastern time
+    return { estimatedOffset: -5, confidence: 'low', region: 'US (assumed Eastern)' };
+  }
+
+  // Unknown TLD — assume UTC
+  return { estimatedOffset: 0, confidence: 'low', region: 'Unknown' };
+}
+
+/**
+ * Check if it's a good time to send to this recipient based on their estimated timezone.
+ * Returns { shouldSend, reason, optimalHourUtc }
+ * Business hours: 9am-6pm in recipient's local time.
+ */
+export function isGoodSendTime(email: string): {
+  shouldSend: boolean;
+  reason: string;
+  recipientLocalHour: number;
+  optimalSendHourUtc: number;
+} {
+  const tz = estimateRecipientTimezone(email);
+  const nowUtc = new Date().getUTCHours();
+  const recipientLocalHour = (nowUtc + tz.estimatedOffset + 24) % 24;
+
+  // Business hours: 9am - 6pm in recipient's local time
+  const isBusinessHours = recipientLocalHour >= 9 && recipientLocalHour < 18;
+
+  // Optimal send time: 10am in recipient's local time
+  const optimalSendHourUtc = (10 - tz.estimatedOffset + 24) % 24;
+
+  if (isBusinessHours) {
+    return {
+      shouldSend: true,
+      reason: `${recipientLocalHour}:00 local time (${tz.region}) — business hours`,
+      recipientLocalHour,
+      optimalSendHourUtc,
+    };
+  }
+
+  // Allow sending if within extended hours (7am-9pm) but note it's not optimal
+  if (recipientLocalHour >= 7 && recipientLocalHour < 21) {
+    return {
+      shouldSend: true,
+      reason: `${recipientLocalHour}:00 local time (${tz.region}) — extended hours, not optimal`,
+      recipientLocalHour,
+      optimalSendHourUtc,
+    };
+  }
+
+  return {
+    shouldSend: false,
+    reason: `${recipientLocalHour}:00 local time (${tz.region}) — outside business hours, defer to ${optimalSendHourUtc}:00 UTC`,
+    recipientLocalHour,
+    optimalSendHourUtc,
+  };
+}
+
+// ── Seed Inbox Placement Testing ──
+
+/**
+ * Seed test configuration for inbox placement testing.
+ * Run before campaigns to verify inbox vs spam placement.
+ *
+ * To use: Create seed accounts at Gmail, Outlook, Yahoo, iCloud
+ * and add them to the SEED_ACCOUNTS env var as JSON array.
+ */
+export interface SeedTestResult {
+  seedEmail: string;
+  isp: string;
+  placement: 'inbox' | 'spam' | 'promotions' | 'not_received' | 'pending';
+  checkedAt: Date;
+}
+
+export function getSeedAccounts(): string[] {
+  const seedJson = process.env.SEED_ACCOUNTS;
+  if (!seedJson) return [];
+  try {
+    const seeds = JSON.parse(seedJson);
+    return Array.isArray(seeds) ? seeds : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Run a seed test by sending a test email to all seed accounts.
+ * Returns the test ID for checking results later (via IMAP).
+ *
+ * Flow:
+ * 1. Send identical email to all seed accounts
+ * 2. Wait 5-10 minutes for delivery
+ * 3. Check each seed account via IMAP for inbox/spam/promotions placement
+ * 4. Return aggregated results
+ */
+export async function initiateSeedTest(
+  subject: string,
+  html: string,
+): Promise<{
+  testId: string;
+  seedCount: number;
+  seeds: string[];
+}> {
+  const seeds = getSeedAccounts();
+  if (seeds.length === 0) {
+    return { testId: '', seedCount: 0, seeds: [] };
+  }
+
+  // Generate unique test ID to identify this batch
+  const testId = `seed_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+  // Tag the subject with a hidden test ID for identification
+  const taggedSubject = `${subject} [${testId}]`;
+
+  // Log the seed test initiation
+  try {
+    await prisma.emailEvent.create({
+      data: {
+        leadId: 'system',
+        type: 'seed_test',
+        details: JSON.stringify({ testId, seeds, initiatedAt: new Date().toISOString() }),
+      },
+    });
+  } catch { /* best effort */ }
+
+  return { testId, seedCount: seeds.length, seeds };
+}

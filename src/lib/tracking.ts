@@ -41,6 +41,26 @@ const PIXEL_VARIANTS = [
 ];
 
 /**
+ * Get the tracking base URL.
+ * Uses TRACKING_DOMAIN env var if set (custom CNAME domain like t.yourdomain.com),
+ * otherwise falls back to the app's base URL.
+ *
+ * Custom tracking domains prevent ISPs from associating your tracking infrastructure
+ * with your main sending domain — isolates reputation risk.
+ *
+ * Setup: Create a CNAME record: t.yourdomain.com → your-app.vercel.app
+ * Then set TRACKING_DOMAIN=https://t.yourdomain.com in env
+ */
+function getTrackingBaseUrl(): string {
+  if (process.env.TRACKING_DOMAIN) {
+    return process.env.TRACKING_DOMAIN.replace(/\/$/, ''); // Remove trailing slash
+  }
+  return process.env.NEXT_PUBLIC_BASE_URL || (process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'http://localhost:3000');
+}
+
+/**
  * Generate a tracking URL with obfuscated parameters.
  * Rotates param names so ISPs can't pattern-match a static structure.
  */
@@ -77,9 +97,7 @@ function buildTrackUrl(baseUrl: string, leadId: string, campaignId?: string): st
  * which means original URLs stay intact in the email — no rewriting.
  */
 export function injectTracking(html: string, leadId: string, campaignId?: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || (process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000');
+  const baseUrl = getTrackingBaseUrl();
 
   const trackUrl = buildTrackUrl(baseUrl, leadId, campaignId);
 
@@ -147,9 +165,7 @@ export function buildClickTrackUrl(
   leadId: string,
   campaignId?: string,
 ): string {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || (process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000');
+  const baseUrl = getTrackingBaseUrl();
 
   const params = getParamSet();
   return `${baseUrl}/api/track?${params.type}=c&${params.lead}=${encodeURIComponent(leadId)}${campaignId ? `&${params.campaign}=${encodeURIComponent(campaignId)}` : ''}&d=${encodeURIComponent(originalUrl)}&_=${Date.now().toString(36)}`;
