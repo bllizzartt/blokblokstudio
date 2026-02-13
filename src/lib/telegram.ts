@@ -58,3 +58,62 @@ export async function notifyTelegram(lead: {
     console.error('[Telegram] Error:', err);
   }
 }
+
+export async function notifyReply(
+  lead: { name: string; email: string },
+  reply: { subject: string; sentiment: string; preview: string; accountEmail: string }
+) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  if (!token || !chatId || token === 'YOUR_BOT_TOKEN_HERE') {
+    console.log('[Telegram] Skipped — bot token or chat ID not configured');
+    return;
+  }
+
+  const sentimentEmoji: Record<string, string> = {
+    positive: '\u2705',
+    negative: '\u274C',
+    neutral: '\u2796',
+    ooo: '\uD83C\uDFD6\uFE0F',
+  };
+
+  const emoji = sentimentEmoji[reply.sentiment] || '\u2796';
+  const truncatedPreview = reply.preview.length > 200
+    ? reply.preview.slice(0, 200) + '...'
+    : reply.preview;
+
+  const message = [
+    '\uD83D\uDCE9 Reply Received!',
+    '',
+    `From: ${lead.name} (${lead.email})`,
+    `To: ${reply.accountEmail}`,
+    `Subject: ${reply.subject}`,
+    `Sentiment: ${emoji} ${reply.sentiment}`,
+    '',
+    `Preview: ${truncatedPreview}`,
+    '',
+    `\uD83D\uDCC5 ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })}`,
+  ].join('\n');
+
+  try {
+    const res = await fetch(
+      `https://api.telegram.org/bot${token}/sendMessage`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: message,
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('[Telegram] Failed to send:', err);
+    }
+  } catch (err) {
+    console.error('[Telegram] Error:', err);
+  }
+}

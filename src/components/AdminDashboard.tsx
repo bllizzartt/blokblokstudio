@@ -45,7 +45,7 @@ interface SavedTemplate {
   updatedAt: string;
 }
 
-type Tab = 'dashboard' | 'leads' | 'compose' | 'templates' | 'history' | 'accounts' | 'sequences' | 'warmup' | 'analytics' | 'lists' | 'domains' | 'inbox';
+type Tab = 'dashboard' | 'leads' | 'compose' | 'templates' | 'history' | 'accounts' | 'sequences' | 'warmup' | 'analytics' | 'lists' | 'domains' | 'inbox' | 'pipeline' | 'settings';
 type SendTarget = 'all' | 'selected' | 'individual';
 
 interface EmailEvent {
@@ -362,6 +362,62 @@ export function AdminDashboard() {
   // Warmup data
   const [warmupData, setWarmupData] = useState<{ id: string; email: string; label: string; warmupEnabled: boolean; warmupDaily: number; warmupPhase: number; dailyLimit: number; daysSinceStart: number; sendWindowStart: number; sendWindowEnd: number; sendWeekdays: string; stats: { totalWarmupSent: number; totalInbox: number; totalSpam: number; inboxRate: number; recentInboxRate: number; totalSent: number; totalBounced: number; bounceRate: number }; warmupLogs: { date: string; sent: number; received: number; inbox: number; spam: number }[] }[]>([]);
 
+  // Lead scoring
+  const [leadScores, setLeadScores] = useState<Record<string, number>>({});
+
+  // Connection testing
+  const [testingConnection, setTestingConnection] = useState<string | null>(null);
+  const [connectionResults, setConnectionResults] = useState<Record<string, { smtp: { success: boolean; latency: number; error?: string }; imap: { success: boolean; latency: number; error?: string } }>>({});
+
+  // Spam score
+  const [spamScore, setSpamScore] = useState<{ score: number; rating: string; issues: { trigger: string; category: string; weight: number }[] } | null>(null);
+  const [checkingSpam, setCheckingSpam] = useState(false);
+
+  // Blacklist
+  const [blacklistResult, setBlacklistResult] = useState<{ domain: string; ip: string; clean: boolean; listedOn: { blacklist: string }[]; totalChecked: number } | null>(null);
+  const [checkingBlacklist, setCheckingBlacklist] = useState(false);
+
+  // Engagement timeline
+  const [timelineLeadId, setTimelineLeadId] = useState<string | null>(null);
+  const [timelineEvents, setTimelineEvents] = useState<EmailEvent[]>([]);
+
+  // Pipeline / Kanban
+  const [pipelineStages, setPipelineStages] = useState<{ id: string; label: string; color: string }[]>([]);
+  const [pipelineData, setPipelineData] = useState<Record<string, Array<{ id: string; name: string; email: string; field: string; status: string; pipelineStage: string | null; tags: string | null; createdAt: string; emailsSent: number; bounceCount: number; website: string | null }>>>({});
+  const [draggingLead, setDraggingLead] = useState<string | null>(null);
+
+  // Settings sub-tab
+  const [settingsTab, setSettingsTab] = useState<'auto-tags' | 'dedup' | 'signatures' | 'custom-fields' | 'saved-views' | 'branching'>('auto-tags');
+
+  // Auto-tag rules
+  const [autoTagRules, setAutoTagRules] = useState<Array<{ condition: string; value: string; tag: string }>>([
+    { condition: 'reply_contains', value: 'interested', tag: 'hot-lead' },
+  ]);
+  const [runningAutoTags, setRunningAutoTags] = useState(false);
+  const [autoTagResult, setAutoTagResult] = useState<{ updated: number } | null>(null);
+
+  // Dedup
+  const [dedupResults, setDedupResults] = useState<Array<{ email: string; domain: string; ids: string[]; names: string[] }>>([]);
+  const [loadingDedup, setLoadingDedup] = useState(false);
+
+  // Signatures
+  const [signatures, setSignatures] = useState<Record<string, string>>({});
+  const [editingSigId, setEditingSigId] = useState<string | null>(null);
+  const [sigDraft, setSigDraft] = useState('');
+
+  // Custom fields
+  const [customFieldDefs, setCustomFieldDefs] = useState<Array<{ name: string; type: string; options?: string[] }>>([]);
+  const [newFieldName, setNewFieldName] = useState('');
+  const [newFieldType, setNewFieldType] = useState('text');
+
+  // Saved views
+  const [savedViews, setSavedViews] = useState<Array<{ id: string; name: string; filters: Record<string, string>; color: string }>>([]);
+  const [newViewName, setNewViewName] = useState('');
+
+  // Sequence branching
+  const [branchSteps, setBranchSteps] = useState<Array<{ id: string; stepOrder: number; subject: string; delayDays: number; branches: Array<{ condition: string; action: string; value?: number }> }>>([]);
+  const [branchSequenceId, setBranchSequenceId] = useState<string | null>(null);
+
   const EMAIL_PROVIDERS: Record<string, { label: string; smtpHost: string; smtpPort: number; instructions: string[] }> = {
     'google': {
       label: 'Google Workspace / Gmail',
@@ -638,6 +694,266 @@ export function AdminDashboard() {
     } catch { /* silently fail */ }
   }, [headers]);
 
+  const fetchLeadScores = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/lead-scores', { headers: headers() });
+      if (res.ok) { const data = await res.json(); setLeadScores(data.scores || {}); }
+    } catch { /* silently fail */ }
+  }, [headers]);
+
+  const testConnection = async (accountId: string) => {
+    setTestingConnection(accountId);
+    try {
+      const res = await fetch('/api/admin/test-connection', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ accountId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setConnectionResults(prev => ({ ...prev, [accountId]: data }));
+        showToast(data.smtp?.success ? 'success' : 'error', data.smtp?.success ? 'SMTP connected!' : `SMTP failed: ${data.smtp?.error?.slice(0, 80)}`);
+      }
+    } catch { showToast('error', 'Connection test failed'); }
+    setTestingConnection(null);
+  };
+
+  const checkSpamScore = async (subj: string, bd: string) => {
+    setCheckingSpam(true);
+    try {
+      const res = await fetch('/api/admin/spam-score', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ subject: subj, body: bd }),
+      });
+      if (res.ok) { const data = await res.json(); setSpamScore(data); }
+    } catch { showToast('error', 'Spam check failed'); }
+    setCheckingSpam(false);
+  };
+
+  const checkBlacklist = async (domain: string) => {
+    setCheckingBlacklist(true);
+    try {
+      const res = await fetch('/api/admin/blacklist', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ domain }),
+      });
+      if (res.ok) { const data = await res.json(); setBlacklistResult(data); }
+    } catch { showToast('error', 'Blacklist check failed'); }
+    setCheckingBlacklist(false);
+  };
+
+  const fetchTimeline = async (leadId: string) => {
+    setTimelineLeadId(leadId);
+    try {
+      const res = await fetch(`/api/admin/events?leadId=${leadId}`, { headers: headers() });
+      if (res.ok) { const data = await res.json(); setTimelineEvents(data.events || []); }
+    } catch { /* silently fail */ }
+  };
+
+  // Pipeline
+  const fetchPipeline = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/pipeline', { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        setPipelineStages(data.stages || []);
+        setPipelineData(data.pipeline || {});
+      }
+    } catch { /* ignore */ }
+  }, [headers]);
+
+  const movePipelineLead = async (leadId: string, stage: string) => {
+    try {
+      await fetch('/api/admin/pipeline', {
+        method: 'PATCH',
+        headers: headers(),
+        body: JSON.stringify({ leadId, stage }),
+      });
+      fetchPipeline();
+    } catch { /* ignore */ }
+  };
+
+  // Auto-tags
+  const runAutoTags = async () => {
+    setRunningAutoTags(true);
+    try {
+      const res = await fetch('/api/admin/auto-tags', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ rules: autoTagRules }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAutoTagResult({ updated: data.updated || 0 });
+        showToast('success', `Auto-tagged ${data.updated} leads`);
+      }
+    } catch { /* ignore */ }
+    setRunningAutoTags(false);
+  };
+
+  // Dedup
+  const fetchDedup = async () => {
+    setLoadingDedup(true);
+    try {
+      const res = await fetch('/api/admin/dedup', { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        setDedupResults(data.duplicates || []);
+      }
+    } catch { /* ignore */ }
+    setLoadingDedup(false);
+  };
+
+  const mergeDuplicates = async (keepId: string, mergeId: string) => {
+    try {
+      const res = await fetch('/api/admin/dedup', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ keepId, mergeId }),
+      });
+      if (res.ok) {
+        showToast('success', 'Leads merged');
+        fetchDedup();
+      }
+    } catch { /* ignore */ }
+  };
+
+  // Signatures
+  const fetchSignatures = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/signatures', { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        const sigs: Record<string, string> = {};
+        for (const s of data.signatures || []) sigs[s.id] = s.signature || '';
+        setSignatures(sigs);
+      }
+    } catch { /* ignore */ }
+  }, [headers]);
+
+  const saveSignature = async (accountId: string, signature: string) => {
+    try {
+      await fetch('/api/admin/signatures', {
+        method: 'PATCH',
+        headers: headers(),
+        body: JSON.stringify({ accountId, signature }),
+      });
+      setSignatures(prev => ({ ...prev, [accountId]: signature }));
+      setEditingSigId(null);
+      showToast('success', 'Signature saved');
+    } catch { /* ignore */ }
+  };
+
+  // Custom fields
+  const fetchCustomFields = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/custom-fields', { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        setCustomFieldDefs(data.fields || []);
+      }
+    } catch { /* ignore */ }
+  }, [headers]);
+
+  const addCustomField = async () => {
+    if (!newFieldName.trim()) return;
+    try {
+      const res = await fetch('/api/admin/custom-fields', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ name: newFieldName.trim(), type: newFieldType }),
+      });
+      if (res.ok) {
+        setNewFieldName('');
+        fetchCustomFields();
+        showToast('success', 'Custom field created');
+      }
+    } catch { /* ignore */ }
+  };
+
+  const deleteCustomField = async (name: string) => {
+    try {
+      await fetch('/api/admin/custom-fields', {
+        method: 'DELETE',
+        headers: headers(),
+        body: JSON.stringify({ name }),
+      });
+      fetchCustomFields();
+    } catch { /* ignore */ }
+  };
+
+  // Saved views
+  const fetchSavedViews = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/saved-views', { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        setSavedViews(data.views || []);
+      }
+    } catch { /* ignore */ }
+  }, [headers]);
+
+  const saveCurrentView = async () => {
+    if (!newViewName.trim()) return;
+    const filters = { search: searchQuery, field: filterField, status: filterStatus, verify: filterVerify, list: filterList };
+    try {
+      await fetch('/api/admin/saved-views', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ name: newViewName.trim(), filters }),
+      });
+      setNewViewName('');
+      fetchSavedViews();
+      showToast('success', 'View saved');
+    } catch { /* ignore */ }
+  };
+
+  const applySavedView = (filters: Record<string, string>) => {
+    if (filters.search) setSearchQuery(filters.search);
+    if (filters.field) setFilterField(filters.field);
+    if (filters.status) setFilterStatus(filters.status);
+    if (filters.verify) setFilterVerify(filters.verify);
+    if (filters.list) setFilterList(filters.list);
+    setTab('leads');
+  };
+
+  const deleteSavedView = async (id: string) => {
+    try {
+      await fetch('/api/admin/saved-views', {
+        method: 'DELETE',
+        headers: headers(),
+        body: JSON.stringify({ id }),
+      });
+      fetchSavedViews();
+    } catch { /* ignore */ }
+  };
+
+  // Sequence branching
+  const fetchBranches = async (sequenceId: string) => {
+    setBranchSequenceId(sequenceId);
+    try {
+      const res = await fetch(`/api/admin/sequence-branches?sequenceId=${sequenceId}`, { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        setBranchSteps(data.steps || []);
+      }
+    } catch { /* ignore */ }
+  };
+
+  const saveBranch = async (stepId: string, branches: Array<{ condition: string; action: string; value?: number }>) => {
+    try {
+      await fetch('/api/admin/sequence-branches', {
+        method: 'PATCH',
+        headers: headers(),
+        body: JSON.stringify({ stepId, branches }),
+      });
+      showToast('success', 'Branch rules saved');
+      if (branchSequenceId) fetchBranches(branchSequenceId);
+    } catch { /* ignore */ }
+  };
+
   const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const pw = password;
@@ -665,6 +981,11 @@ export function AdminDashboard() {
         fetchDomains();
         fetchInbox();
         fetchWarmupData();
+        fetchLeadScores();
+        fetchPipeline();
+        fetchSignatures();
+        fetchCustomFields();
+        fetchSavedViews();
       } else {
         const data = await res.json().catch(() => ({}));
         localStorage.removeItem('bb_admin_pw');
@@ -1151,8 +1472,10 @@ export function AdminDashboard() {
     { id: 'domains', label: 'Domains', icon: <IconVideo />, badge: domains.length },
     { id: 'warmup', label: 'Warmup', icon: <IconVideo /> },
     { id: 'inbox', label: 'Inbox', icon: <IconLeads />, badge: inboxUnread || undefined },
+    { id: 'pipeline', label: 'Pipeline', icon: <IconVideo /> },
     { id: 'analytics', label: 'Analytics', icon: <IconEye />, badge: eventsTotal },
     { id: 'history', label: 'History', icon: <IconHistory />, badge: campaigns.length },
+    { id: 'settings', label: 'Settings', icon: <IconMail /> },
   ];
 
   // ── Dashboard ──
@@ -1658,6 +1981,17 @@ export function AdminDashboard() {
                               (lead.status || 'new') === 'not_interested' ? 'bg-yellow-500/10 text-yellow-400' :
                               'bg-red-500/10 text-red-400'
                             }`}>{(lead.status || 'new').replace('_', ' ')}</span>
+                            {/* Lead Score */}
+                            {leadScores[lead.id] !== undefined && (
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                                leadScores[lead.id] >= 50 ? 'bg-green-500/10 text-green-400' :
+                                leadScores[lead.id] >= 20 ? 'bg-blue-500/10 text-blue-400' :
+                                leadScores[lead.id] > 0 ? 'bg-gray-500/10 text-gray-400' :
+                                'bg-gray-500/10 text-gray-500'
+                              }`}>
+                                {leadScores[lead.id] >= 50 ? 'HOT' : leadScores[lead.id] >= 20 ? 'WARM' : ''} {leadScores[lead.id]}pts
+                              </span>
+                            )}
                             {lead.emailVerified && (
                               <span className={`text-[10px] px-2 py-0.5 rounded-full ${
                                 lead.verifyResult === 'valid' ? 'bg-green-500/10 text-green-400' :
@@ -1938,6 +2272,43 @@ export function AdminDashboard() {
                                 <option value="booked">Booked</option>
                                 <option value="not_interested">Not Interested</option>
                               </select>
+                            </div>
+
+                            {/* Engagement Timeline */}
+                            <div className="sm:col-span-2">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs text-gray-500 uppercase tracking-wider">Engagement Timeline</p>
+                                <button
+                                  onClick={() => fetchTimeline(lead.id)}
+                                  className="text-[11px] px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/5 text-gray-400 hover:text-white"
+                                >
+                                  {timelineLeadId === lead.id && timelineEvents.length > 0 ? 'Refresh' : 'Load Timeline'}
+                                </button>
+                              </div>
+                              {timelineLeadId === lead.id && timelineEvents.length > 0 && (
+                                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                                  {timelineEvents.map(ev => (
+                                    <div key={ev.id} className="flex items-start gap-3 text-xs">
+                                      <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                                        ev.type === 'sent' ? 'bg-blue-500' :
+                                        ev.type === 'opened' ? 'bg-green-500' :
+                                        ev.type === 'clicked' ? 'bg-purple-500' :
+                                        ev.type === 'replied' ? 'bg-orange-500' :
+                                        ev.type === 'bounced' ? 'bg-red-500' :
+                                        'bg-gray-500'
+                                      }`} />
+                                      <div className="flex-1">
+                                        <span className="text-gray-300 font-medium capitalize">{ev.type}</span>
+                                        {ev.details && <span className="text-gray-500 ml-2">{ev.details.slice(0, 80)}</span>}
+                                        <p className="text-gray-600 text-[10px]">{new Date(ev.createdAt).toLocaleString()}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {timelineLeadId === lead.id && timelineEvents.length === 0 && (
+                                <p className="text-xs text-gray-600">No events recorded for this lead yet.</p>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -2549,6 +2920,16 @@ export function AdminDashboard() {
 
                     <div className="flex-1" />
 
+                    {/* Spam Score Check */}
+                    <button
+                      type="button"
+                      onClick={() => checkSpamScore(subject, body)}
+                      disabled={checkingSpam || (!subject && !body)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-white/5 disabled:opacity-30 transition-colors"
+                    >
+                      {checkingSpam ? 'Checking...' : 'Spam Check'}
+                    </button>
+
                     {/* Preview toggle */}
                     <button
                       type="button"
@@ -2561,6 +2942,48 @@ export function AdminDashboard() {
                       Preview
                     </button>
                   </div>
+
+                  {/* Spam Score Result */}
+                  {spamScore && (
+                    <div className={`mx-3 mt-2 p-3 rounded-xl border ${
+                      spamScore.rating === 'clean' ? 'bg-green-500/5 border-green-500/20' :
+                      spamScore.rating === 'low_risk' ? 'bg-blue-500/5 border-blue-500/20' :
+                      spamScore.rating === 'medium_risk' ? 'bg-yellow-500/5 border-yellow-500/20' :
+                      'bg-red-500/5 border-red-500/20'
+                    }`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-lg font-bold ${
+                            spamScore.rating === 'clean' ? 'text-green-400' :
+                            spamScore.rating === 'low_risk' ? 'text-blue-400' :
+                            spamScore.rating === 'medium_risk' ? 'text-yellow-400' :
+                            'text-red-400'
+                          }`}>{spamScore.score}/100</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            spamScore.rating === 'clean' ? 'bg-green-500/10 text-green-400' :
+                            spamScore.rating === 'low_risk' ? 'bg-blue-500/10 text-blue-400' :
+                            spamScore.rating === 'medium_risk' ? 'bg-yellow-500/10 text-yellow-400' :
+                            'bg-red-500/10 text-red-400'
+                          }`}>{spamScore.rating.replace('_', ' ')}</span>
+                        </div>
+                        <button onClick={() => setSpamScore(null)} className="text-gray-500 hover:text-white text-xs">dismiss</button>
+                      </div>
+                      {spamScore.issues.length > 0 && (
+                        <div className="space-y-1">
+                          {spamScore.issues.map((issue, i) => (
+                            <div key={i} className="flex items-center gap-2 text-xs">
+                              <span className="text-gray-500">{issue.category}:</span>
+                              <span className="text-gray-300">&quot;{issue.trigger}&quot;</span>
+                              <span className="text-gray-600">({issue.weight}pts)</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {spamScore.issues.length === 0 && (
+                        <p className="text-xs text-green-400">No spam triggers found. Your email looks clean!</p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Merge tags */}
                   <div className="flex items-center flex-wrap gap-1 px-3 py-2 bg-white/[0.015] border-x border-white/5">
@@ -3190,17 +3613,51 @@ export function AdminDashboard() {
                           </div>
                           <p className="text-xs text-gray-500">{acc.email} &middot; Day {acc.daysSinceStart} &middot; {acc.totalSent} total sent</p>
                         </div>
-                        <button
-                          onClick={async () => {
-                            if (!confirm('Delete this sending account?')) return;
-                            await fetch(`/api/admin/accounts?id=${acc.id}`, { method: 'DELETE', headers: headers() });
-                            fetchAccounts();
-                          }}
-                          className="p-2 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400"
-                        >
-                          <IconTrash />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => testConnection(acc.id)}
+                            disabled={testingConnection === acc.id}
+                            className="px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/5 text-xs text-gray-400 hover:text-white hover:border-white/10 disabled:opacity-40"
+                          >
+                            {testingConnection === acc.id ? 'Testing...' : 'Test Connection'}
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (!confirm('Delete this sending account?')) return;
+                              await fetch(`/api/admin/accounts?id=${acc.id}`, { method: 'DELETE', headers: headers() });
+                              fetchAccounts();
+                            }}
+                            className="p-2 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400"
+                          >
+                            <IconTrash />
+                          </button>
+                        </div>
                       </div>
+
+                      {/* Connection test results */}
+                      {connectionResults[acc.id] && (
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <div className={`rounded-lg p-3 border ${connectionResults[acc.id].smtp.success ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`w-2 h-2 rounded-full ${connectionResults[acc.id].smtp.success ? 'bg-green-500' : 'bg-red-500'}`} />
+                              <span className="text-xs font-medium">SMTP</span>
+                            </div>
+                            <p className="text-[10px] text-gray-400">
+                              {connectionResults[acc.id].smtp.success ? `Connected (${connectionResults[acc.id].smtp.latency}ms)` : connectionResults[acc.id].smtp.error?.slice(0, 60)}
+                            </p>
+                          </div>
+                          <div className={`rounded-lg p-3 border ${connectionResults[acc.id].imap.success ? 'bg-green-500/5 border-green-500/20' : 'bg-yellow-500/5 border-yellow-500/20'}`}>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`w-2 h-2 rounded-full ${connectionResults[acc.id].imap.success ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                              <span className="text-xs font-medium">IMAP</span>
+                            </div>
+                            <p className="text-[10px] text-gray-400">
+                              {connectionResults[acc.id].imap.success ? `Connected (${connectionResults[acc.id].imap.latency}ms)` : connectionResults[acc.id].imap.error?.slice(0, 60) || 'Not configured'}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="mt-3 flex items-center gap-4">
                         <div className="flex-1">
                           <div className="flex justify-between text-xs mb-1">
@@ -4105,6 +4562,13 @@ export function AdminDashboard() {
                             >
                               Check DNS
                             </button>
+                            <button
+                              onClick={() => checkBlacklist(domain.name)}
+                              disabled={checkingBlacklist}
+                              className="px-4 py-2 rounded-xl bg-purple-500/10 text-purple-400 text-sm hover:bg-purple-500/20 disabled:opacity-40"
+                            >
+                              {checkingBlacklist ? 'Checking...' : 'Blacklist Check'}
+                            </button>
                             {!domain.dkimPublicKey && (
                               <button
                                 onClick={async () => {
@@ -4168,6 +4632,27 @@ export function AdminDashboard() {
                                 </div>
                               );
                             })}
+                          </div>
+                        )}
+
+                        {/* Blacklist results */}
+                        {blacklistResult && blacklistResult.domain === domain.name && (
+                          <div className={`mt-3 p-4 rounded-xl border ${blacklistResult.clean ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className={`w-3 h-3 rounded-full ${blacklistResult.clean ? 'bg-green-500' : 'bg-red-500'}`} />
+                              <span className="text-sm font-medium">{blacklistResult.clean ? 'Clean — Not on any blacklists' : `Listed on ${blacklistResult.listedOn.length} blacklist(s)`}</span>
+                              <span className="text-[10px] text-gray-500 ml-auto">IP: {blacklistResult.ip} &middot; {blacklistResult.totalChecked} lists checked</span>
+                            </div>
+                            {blacklistResult.listedOn.length > 0 && (
+                              <div className="space-y-1 mt-2">
+                                {blacklistResult.listedOn.map((bl, i) => (
+                                  <div key={i} className="flex items-center gap-2 text-xs">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                    <span className="text-red-400">{bl.blacklist}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -4379,6 +4864,582 @@ export function AdminDashboard() {
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── PIPELINE TAB (Kanban Board) ── */}
+          {tab === 'pipeline' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">Sales Pipeline</h2>
+                  <p className="text-sm text-gray-500 mt-1">Drag leads across stages to track your sales process</p>
+                </div>
+                <button onClick={fetchPipeline} className="px-4 py-2 rounded-xl bg-orange-500/10 text-orange-400 text-sm hover:bg-orange-500/20">
+                  Refresh
+                </button>
+              </div>
+
+              <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: '70vh' }}>
+                {pipelineStages.map(stage => (
+                  <div
+                    key={stage.id}
+                    className="flex-shrink-0 w-72 bg-[#111] rounded-2xl border border-white/5 flex flex-col"
+                    onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('border-orange-500/30'); }}
+                    onDragLeave={e => { e.currentTarget.classList.remove('border-orange-500/30'); }}
+                    onDrop={e => {
+                      e.preventDefault();
+                      e.currentTarget.classList.remove('border-orange-500/30');
+                      if (draggingLead) movePipelineLead(draggingLead, stage.id);
+                      setDraggingLead(null);
+                    }}
+                  >
+                    <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: stage.color }} />
+                        <span className="font-semibold text-sm">{stage.label}</span>
+                      </div>
+                      <span className="text-xs text-gray-500 bg-white/5 px-2 py-0.5 rounded-full">
+                        {(pipelineData[stage.id] || []).length}
+                      </span>
+                    </div>
+                    <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[65vh]">
+                      {(pipelineData[stage.id] || []).map(lead => (
+                        <div
+                          key={lead.id}
+                          draggable
+                          onDragStart={() => setDraggingLead(lead.id)}
+                          onDragEnd={() => setDraggingLead(null)}
+                          className={`p-3 rounded-xl bg-white/[0.02] border border-white/5 cursor-grab active:cursor-grabbing hover:border-white/10 transition-all ${
+                            draggingLead === lead.id ? 'opacity-50 scale-95' : ''
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-medium text-sm truncate">{lead.name}</span>
+                            {leadScores[lead.id] >= 50 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">HOT</span>}
+                            {leadScores[lead.id] >= 20 && leadScores[lead.id] < 50 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">WARM</span>}
+                          </div>
+                          <p className="text-xs text-gray-500 truncate">{lead.email}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-gray-400">{lead.field}</span>
+                            {lead.emailsSent > 0 && (
+                              <span className="text-[10px] text-gray-600">{lead.emailsSent} sent</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {(pipelineData[stage.id] || []).length === 0 && (
+                        <div className="text-center py-8 text-gray-600 text-xs">
+                          Drop leads here
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {pipelineStages.length === 0 && (
+                  <div className="w-full text-center py-20 text-gray-500">
+                    <p className="text-lg mb-2">No pipeline data yet</p>
+                    <p className="text-sm">Add leads and they&apos;ll appear here automatically</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── SETTINGS TAB ── */}
+          {tab === 'settings' && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold">Settings & Tools</h2>
+
+              {/* Settings sub-tabs */}
+              <div className="flex gap-2 flex-wrap">
+                {([
+                  { id: 'auto-tags' as const, label: 'Auto-Tag Rules' },
+                  { id: 'dedup' as const, label: 'Deduplication' },
+                  { id: 'signatures' as const, label: 'Signatures' },
+                  { id: 'custom-fields' as const, label: 'Custom Fields' },
+                  { id: 'saved-views' as const, label: 'Saved Views' },
+                  { id: 'branching' as const, label: 'Seq. Branching' },
+                ]).map(st => (
+                  <button
+                    key={st.id}
+                    onClick={() => setSettingsTab(st.id)}
+                    className={`px-4 py-2 rounded-xl text-sm transition-all ${
+                      settingsTab === st.id
+                        ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                        : 'bg-white/[0.02] text-gray-400 border border-white/5 hover:border-white/10'
+                    }`}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Auto-Tag Rules */}
+              {settingsTab === 'auto-tags' && (
+                <div className="space-y-4">
+                  <div className="bg-[#111] rounded-2xl border border-white/5 p-6">
+                    <h3 className="font-semibold mb-1">Auto-Tag Rules Engine</h3>
+                    <p className="text-sm text-gray-500 mb-4">Define rules to automatically tag leads based on their behavior and attributes.</p>
+
+                    <div className="space-y-3">
+                      {autoTagRules.map((rule, i) => (
+                        <div key={i} className="flex items-center gap-3 bg-white/[0.02] rounded-xl p-3 border border-white/5">
+                          <select
+                            value={rule.condition}
+                            onChange={e => {
+                              const updated = [...autoTagRules];
+                              updated[i] = { ...updated[i], condition: e.target.value };
+                              setAutoTagRules(updated);
+                            }}
+                            className="bg-white/[0.03] border border-white/5 rounded-lg px-3 py-2 text-sm text-white"
+                          >
+                            <option value="reply_contains">Reply contains</option>
+                            <option value="opened_gte">Opens &ge;</option>
+                            <option value="clicked_gte">Clicks &ge;</option>
+                            <option value="status_is">Status is</option>
+                            <option value="field_is">Industry is</option>
+                            <option value="bounced">Has bounced</option>
+                            <option value="no_engagement">No engagement</option>
+                          </select>
+                          <input
+                            value={rule.value}
+                            onChange={e => {
+                              const updated = [...autoTagRules];
+                              updated[i] = { ...updated[i], value: e.target.value };
+                              setAutoTagRules(updated);
+                            }}
+                            placeholder="Value..."
+                            className="flex-1 bg-white/[0.03] border border-white/5 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600"
+                          />
+                          <span className="text-xs text-gray-500">Tag:</span>
+                          <input
+                            value={rule.tag}
+                            onChange={e => {
+                              const updated = [...autoTagRules];
+                              updated[i] = { ...updated[i], tag: e.target.value };
+                              setAutoTagRules(updated);
+                            }}
+                            placeholder="tag-name"
+                            className="w-36 bg-white/[0.03] border border-white/5 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600"
+                          />
+                          <button
+                            onClick={() => setAutoTagRules(autoTagRules.filter((_, j) => j !== i))}
+                            className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400"
+                          >
+                            <IconX />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-3 mt-4">
+                      <button
+                        onClick={() => setAutoTagRules([...autoTagRules, { condition: 'reply_contains', value: '', tag: '' }])}
+                        className="px-4 py-2 rounded-xl bg-white/[0.03] border border-white/5 text-sm text-gray-400 hover:border-white/10"
+                      >
+                        + Add Rule
+                      </button>
+                      <button
+                        onClick={runAutoTags}
+                        disabled={runningAutoTags || autoTagRules.length === 0}
+                        className="px-6 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold text-sm disabled:opacity-40"
+                      >
+                        {runningAutoTags ? 'Running...' : 'Run Rules'}
+                      </button>
+                      {autoTagResult && (
+                        <span className="text-sm text-green-400">{autoTagResult.updated} leads tagged</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Deduplication */}
+              {settingsTab === 'dedup' && (
+                <div className="space-y-4">
+                  <div className="bg-[#111] rounded-2xl border border-white/5 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="font-semibold">Lead Deduplication</h3>
+                        <p className="text-sm text-gray-500">Find and merge duplicate leads to keep your database clean.</p>
+                      </div>
+                      <button
+                        onClick={fetchDedup}
+                        disabled={loadingDedup}
+                        className="px-4 py-2 rounded-xl bg-orange-500/10 text-orange-400 text-sm hover:bg-orange-500/20 disabled:opacity-40"
+                      >
+                        {loadingDedup ? 'Scanning...' : 'Scan for Duplicates'}
+                      </button>
+                    </div>
+
+                    {dedupResults.length > 0 ? (
+                      <div className="space-y-3">
+                        {dedupResults.map((dup, i) => (
+                          <div key={i} className="bg-white/[0.02] rounded-xl p-4 border border-white/5">
+                            <div className="flex items-center justify-between mb-2">
+                              <div>
+                                <span className="text-sm font-medium">{dup.domain || dup.email}</span>
+                                <span className="ml-2 text-xs text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded-full">{dup.ids.length} duplicates</span>
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              {dup.ids.map((id, j) => (
+                                <div key={id} className="flex items-center justify-between text-sm">
+                                  <span className="text-gray-400">{dup.names[j] || 'Unknown'}</span>
+                                  {j > 0 && (
+                                    <button
+                                      onClick={() => mergeDuplicates(dup.ids[0], id)}
+                                      className="text-xs px-3 py-1 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                                    >
+                                      Merge into first
+                                    </button>
+                                  )}
+                                  {j === 0 && (
+                                    <span className="text-xs px-3 py-1 rounded-lg bg-green-500/10 text-green-400">Primary</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-gray-600 text-sm">
+                        {loadingDedup ? 'Scanning...' : 'Click "Scan for Duplicates" to find duplicate leads'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Signatures */}
+              {settingsTab === 'signatures' && (
+                <div className="space-y-4">
+                  <div className="bg-[#111] rounded-2xl border border-white/5 p-6">
+                    <h3 className="font-semibold mb-1">Email Signatures</h3>
+                    <p className="text-sm text-gray-500 mb-4">Set a unique HTML signature for each sending account.</p>
+
+                    {accounts.length > 0 ? (
+                      <div className="space-y-4">
+                        {accounts.map(acct => (
+                          <div key={acct.id} className="bg-white/[0.02] rounded-xl p-4 border border-white/5">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <span className="font-medium text-sm">{acct.label || acct.email}</span>
+                                <span className="ml-2 text-xs text-gray-500">{acct.email}</span>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  if (editingSigId === acct.id) {
+                                    setEditingSigId(null);
+                                  } else {
+                                    setEditingSigId(acct.id);
+                                    setSigDraft(signatures[acct.id] || '');
+                                  }
+                                }}
+                                className="text-xs px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/5 text-gray-400 hover:text-white"
+                              >
+                                {editingSigId === acct.id ? 'Cancel' : 'Edit'}
+                              </button>
+                            </div>
+                            {editingSigId === acct.id ? (
+                              <div className="space-y-3">
+                                <textarea
+                                  value={sigDraft}
+                                  onChange={e => setSigDraft(e.target.value)}
+                                  rows={6}
+                                  placeholder="<p><strong>Chase</strong><br/>Blok Blok Studio<br/>chase@blokblok.studio</p>"
+                                  className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30 font-mono"
+                                />
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => saveSignature(acct.id, sigDraft)}
+                                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold text-sm"
+                                  >
+                                    Save Signature
+                                  </button>
+                                  <span className="text-xs text-gray-500">Supports HTML</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-sm text-gray-500">
+                                {signatures[acct.id] ? (
+                                  <div className="bg-white/[0.02] rounded-lg p-3 text-gray-300" dangerouslySetInnerHTML={{ __html: signatures[acct.id] }} />
+                                ) : (
+                                  <span className="text-gray-600 italic">No signature set</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-gray-600 text-sm">
+                        Add sending accounts first to configure signatures
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Custom Fields */}
+              {settingsTab === 'custom-fields' && (
+                <div className="space-y-4">
+                  <div className="bg-[#111] rounded-2xl border border-white/5 p-6">
+                    <h3 className="font-semibold mb-1">Custom Fields</h3>
+                    <p className="text-sm text-gray-500 mb-4">Add custom fields to leads for tracking additional information.</p>
+
+                    {customFieldDefs.length > 0 && (
+                      <div className="space-y-2 mb-4">
+                        {customFieldDefs.map(field => (
+                          <div key={field.name} className="flex items-center justify-between bg-white/[0.02] rounded-xl px-4 py-3 border border-white/5">
+                            <div className="flex items-center gap-3">
+                              <span className="font-medium text-sm">{field.name}</span>
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-white/5 text-gray-400">{field.type}</span>
+                              {field.options && (
+                                <span className="text-xs text-gray-500">{field.options.join(', ')}</span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => deleteCustomField(field.name)}
+                              className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400"
+                            >
+                              <IconX />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3">
+                      <input
+                        value={newFieldName}
+                        onChange={e => setNewFieldName(e.target.value)}
+                        placeholder="Field name..."
+                        className="flex-1 bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30"
+                      />
+                      <select
+                        value={newFieldType}
+                        onChange={e => setNewFieldType(e.target.value)}
+                        className="bg-white/[0.03] border border-white/5 rounded-xl px-3 py-2.5 text-sm text-white"
+                      >
+                        <option value="text">Text</option>
+                        <option value="number">Number</option>
+                        <option value="date">Date</option>
+                        <option value="url">URL</option>
+                        <option value="email">Email</option>
+                        <option value="boolean">Yes/No</option>
+                        <option value="select">Select</option>
+                      </select>
+                      <button
+                        onClick={addCustomField}
+                        disabled={!newFieldName.trim()}
+                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold text-sm disabled:opacity-40"
+                      >
+                        Add Field
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Saved Views */}
+              {settingsTab === 'saved-views' && (
+                <div className="space-y-4">
+                  <div className="bg-[#111] rounded-2xl border border-white/5 p-6">
+                    <h3 className="font-semibold mb-1">Saved Views & Smart Filters</h3>
+                    <p className="text-sm text-gray-500 mb-4">Save your current lead filters as a named view. Apply them instantly.</p>
+
+                    <div className="flex items-center gap-3 mb-6">
+                      <input
+                        value={newViewName}
+                        onChange={e => setNewViewName(e.target.value)}
+                        placeholder="View name (e.g. Hot Leads, Unverified)"
+                        className="flex-1 bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30"
+                      />
+                      <button
+                        onClick={saveCurrentView}
+                        disabled={!newViewName.trim()}
+                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold text-sm disabled:opacity-40"
+                      >
+                        Save Current Filters
+                      </button>
+                    </div>
+
+                    {savedViews.length > 0 ? (
+                      <div className="space-y-2">
+                        {savedViews.map(view => (
+                          <div key={view.id} className="flex items-center justify-between bg-white/[0.02] rounded-xl px-4 py-3 border border-white/5">
+                            <div className="flex items-center gap-3">
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: view.color }} />
+                              <span className="font-medium text-sm">{view.name}</span>
+                              <div className="flex gap-1">
+                                {Object.entries(view.filters).filter(([, v]) => v && v !== 'all').map(([k, v]) => (
+                                  <span key={k} className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-gray-400">
+                                    {k}: {v}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => applySavedView(view.filters)}
+                                className="text-xs px-3 py-1.5 rounded-lg bg-orange-500/10 text-orange-400 hover:bg-orange-500/20"
+                              >
+                                Apply
+                              </button>
+                              <button
+                                onClick={() => deleteSavedView(view.id)}
+                                className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400"
+                              >
+                                <IconX />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-gray-600 text-sm">
+                        Set filters on the Leads tab, then save them here for quick access
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Sequence Branching */}
+              {settingsTab === 'branching' && (
+                <div className="space-y-4">
+                  <div className="bg-[#111] rounded-2xl border border-white/5 p-6">
+                    <h3 className="font-semibold mb-1">Conditional Sequence Branching</h3>
+                    <p className="text-sm text-gray-500 mb-4">Add if/then rules to sequence steps. E.g., &ldquo;If lead opened email, skip to step 3&rdquo;.</p>
+
+                    {/* Sequence selector */}
+                    <div className="mb-4">
+                      <label className="text-xs text-gray-500 mb-1 block">Select a sequence:</label>
+                      <div className="flex gap-2 flex-wrap">
+                        {sequences.map(seq => (
+                          <button
+                            key={seq.id}
+                            onClick={() => fetchBranches(seq.id)}
+                            className={`px-3 py-1.5 rounded-lg text-sm transition-all ${
+                              branchSequenceId === seq.id
+                                ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                                : 'bg-white/[0.02] text-gray-400 border border-white/5 hover:border-white/10'
+                            }`}
+                          >
+                            {seq.name}
+                          </button>
+                        ))}
+                        {sequences.length === 0 && (
+                          <span className="text-sm text-gray-600">No sequences created yet</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Branch rules per step */}
+                    {branchSteps.length > 0 && (
+                      <div className="space-y-4">
+                        {branchSteps.map((step, si) => (
+                          <div key={step.id} className="bg-white/[0.02] rounded-xl p-4 border border-white/5">
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="font-medium text-sm">Step {step.stepOrder + 1}: {step.subject}</span>
+                              <span className="text-xs text-gray-500">Delay: {step.delayDays}d</span>
+                            </div>
+
+                            {step.branches.map((branch, bi) => (
+                              <div key={bi} className="flex items-center gap-2 mb-2 text-sm">
+                                <span className="text-gray-500 text-xs">IF</span>
+                                <select
+                                  value={branch.condition}
+                                  onChange={e => {
+                                    const updated = [...branchSteps];
+                                    updated[si].branches[bi] = { ...branch, condition: e.target.value };
+                                    setBranchSteps(updated);
+                                  }}
+                                  className="bg-white/[0.03] border border-white/5 rounded-lg px-2 py-1.5 text-xs text-white"
+                                >
+                                  <option value="opened">Opened</option>
+                                  <option value="not_opened">Not opened</option>
+                                  <option value="clicked">Clicked</option>
+                                  <option value="not_clicked">Not clicked</option>
+                                  <option value="replied">Replied</option>
+                                  <option value="bounced">Bounced</option>
+                                </select>
+                                <span className="text-gray-500 text-xs">THEN</span>
+                                <select
+                                  value={branch.action}
+                                  onChange={e => {
+                                    const updated = [...branchSteps];
+                                    updated[si].branches[bi] = { ...branch, action: e.target.value };
+                                    setBranchSteps(updated);
+                                  }}
+                                  className="bg-white/[0.03] border border-white/5 rounded-lg px-2 py-1.5 text-xs text-white"
+                                >
+                                  <option value="goto_step">Go to step</option>
+                                  <option value="skip">Skip next</option>
+                                  <option value="stop">Stop sequence</option>
+                                  <option value="wait_extra">Wait extra days</option>
+                                </select>
+                                {(branch.action === 'goto_step' || branch.action === 'wait_extra') && (
+                                  <input
+                                    type="number"
+                                    min={branch.action === 'goto_step' ? 1 : 1}
+                                    value={branch.value || ''}
+                                    onChange={e => {
+                                      const updated = [...branchSteps];
+                                      updated[si].branches[bi] = { ...branch, value: parseInt(e.target.value) || 0 };
+                                      setBranchSteps(updated);
+                                    }}
+                                    className="w-16 bg-white/[0.03] border border-white/5 rounded-lg px-2 py-1.5 text-xs text-white"
+                                    placeholder={branch.action === 'goto_step' ? 'Step #' : 'Days'}
+                                  />
+                                )}
+                                <button
+                                  onClick={() => {
+                                    const updated = [...branchSteps];
+                                    updated[si].branches = updated[si].branches.filter((_, j) => j !== bi);
+                                    setBranchSteps(updated);
+                                  }}
+                                  className="p-1 rounded hover:bg-red-500/10 text-gray-500 hover:text-red-400"
+                                >
+                                  <IconX />
+                                </button>
+                              </div>
+                            ))}
+
+                            <div className="flex items-center gap-2 mt-2">
+                              <button
+                                onClick={() => {
+                                  const updated = [...branchSteps];
+                                  updated[si].branches.push({ condition: 'opened', action: 'goto_step', value: 1 });
+                                  setBranchSteps(updated);
+                                }}
+                                className="text-xs px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/5 text-gray-400 hover:border-white/10"
+                              >
+                                + Add Branch
+                              </button>
+                              <button
+                                onClick={() => saveBranch(step.id, step.branches)}
+                                className="text-xs px-3 py-1.5 rounded-lg bg-orange-500/10 text-orange-400 hover:bg-orange-500/20"
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {branchSequenceId && branchSteps.length === 0 && (
+                      <div className="text-center py-6 text-gray-600 text-sm">
+                        This sequence has no steps yet
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
