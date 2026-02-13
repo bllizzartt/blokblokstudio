@@ -1851,10 +1851,27 @@ export function AdminDashboard() {
                           <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
                           <span className="text-sm text-red-400">Listed on {vpsBlacklistResult.listedOn.length} blacklist(s) — consider getting a new VPS IP</span>
                         </div>
-                        <div className="grid grid-cols-2 gap-1.5">
-                          {vpsBlacklistResult.listedOn.map((bl, i) => (
-                            <div key={i} className="px-3 py-1.5 rounded-lg bg-red-500/5 border border-red-500/10 text-xs text-red-300">
-                              {bl.blacklist}
+                        <div className="grid grid-cols-1 gap-1.5">
+                          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                          {vpsBlacklistResult.listedOn.map((bl: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-500/5 border border-red-500/10 text-xs text-red-300">
+                              <span className="truncate">{bl.blacklist}</span>
+                              {bl.delist?.type === 'auto' ? (
+                                <span className="ml-auto px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 text-[10px] whitespace-nowrap flex-shrink-0" title={bl.delist.note}>
+                                  {bl.delist.autoDays ? `Auto-delists ~${bl.delist.autoDays}d` : 'Auto-delists'}
+                                </span>
+                              ) : bl.delist?.type === 'manual' && bl.delist?.url ? (
+                                <a
+                                  href={bl.delist.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="ml-auto px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 text-[10px] hover:bg-orange-500/20 transition-colors whitespace-nowrap flex-shrink-0"
+                                  title={bl.delist.note}
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  Request Delisting &rarr;
+                                </a>
+                              ) : null}
                             </div>
                           ))}
                         </div>
@@ -5352,11 +5369,27 @@ export function AdminDashboard() {
                               <span className="text-[10px] text-gray-500 ml-auto">IP: {blacklistResult.ip} &middot; {blacklistResult.totalChecked} lists checked</span>
                             </div>
                             {blacklistResult.listedOn.length > 0 && (
-                              <div className="space-y-1 mt-2">
-                                {blacklistResult.listedOn.map((bl, i) => (
+                              <div className="space-y-1.5 mt-2">
+                                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                                {blacklistResult.listedOn.map((bl: any, i: number) => (
                                   <div key={i} className="flex items-center gap-2 text-xs">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
                                     <span className="text-red-400">{bl.blacklist}</span>
+                                    {bl.delist?.type === 'auto' ? (
+                                      <span className="ml-auto px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 text-[10px] whitespace-nowrap" title={bl.delist.note}>
+                                        {bl.delist.autoDays ? `Auto-delists ~${bl.delist.autoDays}d` : 'Auto-delists'}
+                                      </span>
+                                    ) : bl.delist?.type === 'manual' && bl.delist?.url ? (
+                                      <a
+                                        href={bl.delist.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="ml-auto px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 text-[10px] hover:bg-orange-500/20 transition-colors whitespace-nowrap"
+                                        title={bl.delist.note}
+                                      >
+                                        Request Delisting &rarr;
+                                      </a>
+                                    ) : null}
                                   </div>
                                 ))}
                               </div>

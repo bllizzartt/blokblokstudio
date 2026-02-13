@@ -38,6 +38,125 @@ const DOMAIN_BLACKLISTS = [
 const CRITICAL_BLACKLISTS = ['zen.spamhaus.org', 'sbl.spamhaus.org', 'bl.spamcop.net'];
 const HIGH_SEVERITY = ['b.barracudacentral.org', 'dbl.spamhaus.org', 'xbl.spamhaus.org'];
 
+// ── Delisting Info ──
+// Maps each blacklist to its delisting method: auto (wait it out) or manual (submit removal request)
+
+export interface DelistInfo {
+  type: 'auto' | 'manual';
+  /** Approximate days to auto-removal (auto type only) */
+  autoDays?: number;
+  /** Human-readable note shown to the user */
+  note: string;
+  /** URL for manual delisting request (manual type only) */
+  url?: string;
+}
+
+export const BLACKLIST_DELIST_INFO: Record<string, DelistInfo> = {
+  // ── Auto-delist (no action needed — wait it out) ──
+  'bl.spamcop.net': {
+    type: 'auto',
+    autoDays: 2,
+    note: 'Auto-removes 24-48h after complaints stop',
+  },
+  'dnsbl-1.uceprotect.net': {
+    type: 'auto',
+    autoDays: 7,
+    note: 'Auto-removes after 7 days if no new abuse',
+  },
+  'psbl.surriel.com': {
+    type: 'auto',
+    note: 'Auto-removes when spam activity stops',
+  },
+  'dnsbl.dronebl.org': {
+    type: 'auto',
+    note: 'Auto-removes when abuse stops',
+  },
+  'truncate.gbudb.net': {
+    type: 'auto',
+    note: 'Reputation-based — auto-adjusts with improved behavior',
+  },
+  'all.s5h.net': {
+    type: 'auto',
+    note: 'Trap-based — auto-removes when spam stops',
+  },
+  'ix.dnsbl.manitu.net': {
+    type: 'auto',
+    note: 'Auto-removes when spam activity stops',
+  },
+
+  // ── Manual delist (IP blacklists — submit removal request) ──
+  'zen.spamhaus.org': {
+    type: 'manual',
+    note: 'Submit removal request via Spamhaus checker',
+    url: 'https://check.spamhaus.org/',
+  },
+  'sbl.spamhaus.org': {
+    type: 'manual',
+    note: 'Submit removal request via Spamhaus checker',
+    url: 'https://check.spamhaus.org/',
+  },
+  'xbl.spamhaus.org': {
+    type: 'manual',
+    note: 'Submit removal request via Spamhaus checker',
+    url: 'https://check.spamhaus.org/',
+  },
+  'pbl.spamhaus.org': {
+    type: 'manual',
+    note: 'Submit removal request via Spamhaus checker',
+    url: 'https://check.spamhaus.org/',
+  },
+  'b.barracudacentral.org': {
+    type: 'manual',
+    note: 'Submit IP removal request to Barracuda',
+    url: 'https://barracudacentral.org/rbl/removal-request',
+  },
+  'dnsbl.sorbs.net': {
+    type: 'manual',
+    note: 'Submit removal request to SORBS',
+    url: 'http://www.sorbs.net/cgi-bin/support',
+  },
+  'spam.dnsbl.sorbs.net': {
+    type: 'manual',
+    note: 'Submit removal request to SORBS',
+    url: 'http://www.sorbs.net/cgi-bin/support',
+  },
+  'bl.mailspike.net': {
+    type: 'manual',
+    note: 'Look up and request removal via Mailspike',
+    url: 'https://mailspike.org/iplookup.html',
+  },
+
+  // ── Manual delist (Domain blacklists) ──
+  'dbl.spamhaus.org': {
+    type: 'manual',
+    note: 'Submit removal request via Spamhaus checker',
+    url: 'https://check.spamhaus.org/',
+  },
+  'multi.surbl.org': {
+    type: 'manual',
+    note: 'Request analysis and removal via SURBL',
+    url: 'http://www.surbl.org/surbl-analysis',
+  },
+  'black.uribl.com': {
+    type: 'manual',
+    note: 'Submit removal request to URIBL',
+    url: 'https://admin.uribl.com/',
+  },
+  'rhsbl.sorbs.net': {
+    type: 'manual',
+    note: 'Submit removal request to SORBS',
+    url: 'http://www.sorbs.net/cgi-bin/support',
+  },
+};
+
+/**
+ * Get delisting info for a blacklist hostname.
+ * Returns null if unknown.
+ */
+export function getDelistInfo(blacklist: string): DelistInfo | null {
+  return BLACKLIST_DELIST_INFO[blacklist] || null;
+}
+
 /**
  * Check if an IP is listed on a specific DNSBL.
  */
