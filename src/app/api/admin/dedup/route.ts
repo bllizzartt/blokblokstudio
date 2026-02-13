@@ -54,7 +54,32 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Build duplicates array in the shape the dashboard expects:
+    // { email, domain, ids, names }
+    const duplicates: { email: string; domain: string; ids: string[]; names: string[] }[] = [];
+
+    // Add company groups (same domain = potential duplicates)
+    for (const group of companyGroups) {
+      duplicates.push({
+        email: group.leads[0].email,
+        domain: group.domain,
+        ids: group.leads.map(l => l.id),
+        names: group.leads.map(l => l.name),
+      });
+    }
+
+    // Add similar name pairs as groups
+    for (const pair of similarNames) {
+      duplicates.push({
+        email: `${pair.lead1.email}, ${pair.lead2.email}`,
+        domain: 'Same name',
+        ids: [pair.lead1.id, pair.lead2.id],
+        names: [pair.lead1.name, pair.lead2.name],
+      });
+    }
+
     return NextResponse.json({
+      duplicates,
       companyGroups,
       similarNames,
       totalLeads: leads.length,
@@ -71,8 +96,10 @@ export async function POST(req: NextRequest) {
   if (authError) return authError;
 
   try {
-    const { keepId, removeId } = await req.json();
-    if (!keepId || !removeId) return NextResponse.json({ error: 'Provide keepId and removeId' }, { status: 400 });
+    const body = await req.json();
+    const keepId = body.keepId;
+    const removeId = body.removeId || body.mergeId; // Dashboard sends mergeId
+    if (!keepId || !removeId) return NextResponse.json({ error: 'Provide keepId and removeId (or mergeId)' }, { status: 400 });
 
     // Transfer all events from removeId to keepId
     await prisma.emailEvent.updateMany({

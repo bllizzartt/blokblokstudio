@@ -43,12 +43,24 @@ export async function POST(req: NextRequest) {
     const ip = directIp || null;
     const scan = await fullBlacklistScan(ip || '0.0.0.0', domain || undefined);
 
+    // Build listedOn array from scan results (matches dashboard expected shape)
+    const allResults = [...scan.ipResults, ...scan.domainResults];
+    const listedOn = allResults
+      .filter(r => r.listed)
+      .map(r => ({
+        blacklist: r.blacklist,
+        type: r.severity,
+      }));
+    const totalChecked = allResults.length;
+
     return NextResponse.json({
       domain: domain || null,
       ip: scan.ip,
       clean: scan.clean,
       score: scan.score,
       listedCount: scan.listedCount,
+      listedOn,
+      totalChecked,
       criticalListings: scan.criticalListings,
       highListings: scan.highListings,
       ipResults: scan.ipResults,

@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, totalTagged, totalLeads: leads.length });
+    return NextResponse.json({ success: true, updated: totalTagged, totalTagged, totalLeads: leads.length });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: errMsg.slice(0, 200) }, { status: 500 });

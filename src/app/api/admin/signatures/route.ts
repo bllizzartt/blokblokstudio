@@ -15,14 +15,15 @@ export async function GET(req: NextRequest) {
     const accounts = await prisma.$queryRawUnsafe<{ id: string; email: string; label: string; signature: string | null }[]>(
       `SELECT "id", "email", "label", COALESCE("signature", '') as "signature" FROM "SendingAccount" WHERE "active" = true ORDER BY "email"`
     );
-    return NextResponse.json({ accounts });
+    return NextResponse.json({ accounts, signatures: accounts });
   } catch {
     // Column doesn't exist — return without signatures
     const accounts = await prisma.sendingAccount.findMany({
       where: { active: true },
       select: { id: true, email: true, label: true },
     });
-    return NextResponse.json({ accounts: accounts.map(a => ({ ...a, signature: '' })) });
+    const mapped = accounts.map(a => ({ ...a, signature: '' }));
+    return NextResponse.json({ accounts: mapped, signatures: mapped });
   }
 }
 
