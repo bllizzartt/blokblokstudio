@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAdmin } from '@/lib/admin-auth';
-import { fullBlacklistScan, getBlacklistHistory, checkDnsHealth } from '@/lib/blacklist-monitor';
+import { fullBlacklistScan, getBlacklistHistory, checkDnsHealth, getDelistInfo } from '@/lib/blacklist-monitor';
 
 /**
  * POST /api/admin/blacklist — comprehensive blacklist + DNS health check
@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
       .map(r => ({
         blacklist: r.blacklist,
         type: r.severity,
+        delist: getDelistInfo(r.blacklist),
       }));
     const totalChecked = allResults.length;
 
