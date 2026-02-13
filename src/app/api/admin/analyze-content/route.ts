@@ -13,10 +13,8 @@ import { analyzeAiDetectionRisk, applyStylometricVariation } from '@/lib/stylome
  * Use this in the campaign builder to check copy before sending.
  */
 export async function POST(req: NextRequest) {
-  const admin = await checkAdmin(req);
-  if (!admin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authError = checkAdmin(req);
+  if (authError) return authError;
 
   const body = await req.json();
   const { text } = body as { text?: string };

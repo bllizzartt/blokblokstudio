@@ -87,35 +87,38 @@ export function ContactContent() {
    * Set to `true` after the user clicks Submit.
    */
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
-  /**
-   * Form submit handler.
-   *
-   * CURRENT BEHAVIOR:
-   *   Prevents default form submission and immediately shows the success
-   *   message. No data is actually sent anywhere.
-   *
-   * TODO — BACKEND INTEGRATION:
-   *   To make this form functional, add your API call here before
-   *   setting `submitted` to true. For example:
-   *
-   *     const handleSubmit = async (e: React.FormEvent) => {
-   *       e.preventDefault();
-   *       const formData = new FormData(e.target as HTMLFormElement);
-   *       await fetch('/api/contact', {
-   *         method: 'POST',
-   *         body: JSON.stringify(Object.fromEntries(formData)),
-   *         headers: { 'Content-Type': 'application/json' },
-   *       });
-   *       setSubmitted(true);
-   *     };
-   *
-   *   You will also need to create the corresponding API route
-   *   (e.g., src/app/api/contact/route.ts) to handle the submission.
-   */
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    setSubmitting(true);
+    setError('');
+
+    try {
+      const formData = new FormData(e.target as HTMLFormElement);
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: formData.get('name'),
+          email: formData.get('email'),
+          company: formData.get('company'),
+          message: formData.get('message'),
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to submit');
+      }
+
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -215,6 +218,7 @@ export function ContactContent() {
                     </label>
                     <input
                       type="text"
+                      name="name"
                       required
                       className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 text-sm sm:text-base text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-colors"
                       placeholder={t('name')}
@@ -228,6 +232,7 @@ export function ContactContent() {
                     </label>
                     <input
                       type="email"
+                      name="email"
                       required
                       className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 text-sm sm:text-base text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-colors"
                       placeholder={t('email')}
@@ -235,13 +240,14 @@ export function ContactContent() {
                   </div>
                 </div>
 
-                {/* Company field (optional — no "required" attribute) */}
+                {/* Company field (optional) */}
                 <div>
                   <label className="block text-sm text-gray-400 mb-2">
                     {t('company')}
                   </label>
                   <input
                     type="text"
+                    name="company"
                     className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-colors"
                     placeholder={t('company')}
                   />
@@ -253,6 +259,7 @@ export function ContactContent() {
                     {t('message')}
                   </label>
                   <textarea
+                    name="message"
                     required
                     rows={6}
                     className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 text-sm sm:text-base text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-colors resize-none"
@@ -260,19 +267,18 @@ export function ContactContent() {
                   />
                 </div>
 
-                {/*
-                  Submit button.
-                  - whileHover/whileTap: subtle scale animation via framer-motion.
-                  - Button text from translation key "contact.submit".
-                  - On mobile: full width (w-full). On sm+: auto width (sm:w-auto).
-                */}
+                {error && (
+                  <p className="text-red-400 text-sm">{error}</p>
+                )}
+
                 <motion.button
                   type="submit"
+                  disabled={submitting}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="w-full sm:w-auto px-10 py-4 rounded-full bg-white text-black font-medium hover:bg-gray-100 transition-colors"
+                  className="w-full sm:w-auto px-10 py-4 rounded-full bg-white text-black font-medium hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {t('submit')}
+                  {submitting ? 'Sending...' : t('submit')}
                 </motion.button>
               </form>
             )}

@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
   if (authError) return authError;
 
   try {
-    const { action, name, description, color, listId, leadIds } = await req.json();
+    const { action, name, description, color, listId, leadIds, fromListId, toListId } = await req.json();
 
     // Create a new list
     if (action === 'create' || (!action && name)) {
@@ -106,7 +106,6 @@ export async function POST(req: NextRequest) {
 
     // Move leads between lists (remove from source, add to destination)
     if (action === 'moveLeads') {
-      const { fromListId, toListId } = await req.json();
       if (!fromListId || !toListId || !leadIds?.length) {
         return NextResponse.json({ error: 'Missing fromListId, toListId, or leadIds' }, { status: 400 });
       }

@@ -1,32 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import crypto from 'crypto';
 
-// In-memory rate limiting store
-const loginAttempts = new Map<string, { count: number; lastAttempt: number; blockedUntil: number }>();
-
-// POST /api/admin/login — authenticate admin with rate limiting
+// POST /api/admin/login — authenticate admin with persistent rate limiting
 export async function POST(req: NextRequest) {
-  // Clean up old entries (older than 1 hour)
-  const oneHourAgo = Date.now() - 60 * 60 * 1000;
-  for (const [ip, data] of loginAttempts.entries()) {
-    if (data.lastAttempt < oneHourAgo) {
-      loginAttempts.delete(ip);
-    }
-  }
-
   // Get client IP
   const forwarded = req.headers.get('x-forwarded-for');
   const ip = forwarded ? forwarded.split(',')[0].trim() : 'unknown';
 
-  // Get or initialize attempt data
-  const attemptData = loginAttempts.get(ip) || { count: 0, lastAttempt: 0, blockedUntil: 0 };
+  // Check rate limit via database (persists across serverless invocations)
+  try {
+    const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000);
 
-  // Check if IP is currently blocked
-  if (attemptData.blockedUntil > Date.now()) {
-    const retryAfter = Math.ceil((attemptData.blockedUntil - Date.now()) / 1000);
-    return NextResponse.json(
-      { error: 'Too many failed attempts. Please try again later.', retryAfter },
-      { status: 429 }
+    // Count recent failed attempts from this IP
+    const recentAttempts = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+      `SELECT COUNT(*) as count FROM "AuditLog"
+       WHERE "action" = 'login_failed'
+       AND "ipAddress" = $1
+       AND "createdAt" > $2`,
+      ip,
+      fifteenMinAgo,
     );
+
+    const failedCount = Number(recentAttempts[0]?.count || 0);
+    if (failedCount >= 5) {
+      return NextResponse.json(
+        { error: 'Too many failed attempts. Please try again in 15 minutes.', retryAfter: 900 },
+        { status: 429 }
+      );
+    }
+  } catch {
+    // If AuditLog table doesn't exist yet, skip rate limiting
   }
 
   try {
@@ -36,25 +40,51 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Password is required' }, { status: 400 });
     }
 
-    // Check password
-    if (password === process.env.ADMIN_PASSWORD) {
-      // Success: reset attempt counter
-      loginAttempts.delete(ip);
+    // Timing-safe password comparison
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    if (!adminPassword) {
+      return NextResponse.json({ error: 'ADMIN_PASSWORD not configured' }, { status: 500 });
+    }
+
+    const passwordBuffer = Buffer.from(password);
+    const adminBuffer = Buffer.from(adminPassword);
+    const isValid = passwordBuffer.length === adminBuffer.length &&
+      crypto.timingSafeEqual(passwordBuffer, adminBuffer);
+
+    if (isValid) {
+      // Log successful login
+      try {
+        await prisma.auditLog.create({
+          data: { action: 'login_success', ipAddress: ip, userAgent: req.headers.get('user-agent') || undefined },
+        });
+      } catch { /* table might not exist */ }
+
       return NextResponse.json({ success: true });
     } else {
-      // Failure: increment count and check if should block
-      attemptData.count += 1;
-      attemptData.lastAttempt = Date.now();
+      // Log failed attempt for rate limiting
+      try {
+        await prisma.auditLog.create({
+          data: { action: 'login_failed', ipAddress: ip, userAgent: req.headers.get('user-agent') || undefined },
+        });
+      } catch { /* table might not exist */ }
 
-      if (attemptData.count >= 5) {
-        // Block for 15 minutes
-        attemptData.blockedUntil = Date.now() + 15 * 60 * 1000;
-      }
-
-      loginAttempts.set(ip, attemptData);
+      // Recalculate remaining attempts
+      let remaining = 4;
+      try {
+        const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000);
+        const recentAttempts = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+          `SELECT COUNT(*) as count FROM "AuditLog"
+           WHERE "action" = 'login_failed'
+           AND "ipAddress" = $1
+           AND "createdAt" > $2`,
+          ip,
+          fifteenMinAgo,
+        );
+        remaining = Math.max(0, 5 - Number(recentAttempts[0]?.count || 1));
+      } catch { /* skip */ }
 
       return NextResponse.json(
-        { error: 'Invalid password', attemptsRemaining: Math.max(0, 5 - attemptData.count) },
+        { error: 'Invalid password', attemptsRemaining: remaining },
         { status: 401 }
       );
     }

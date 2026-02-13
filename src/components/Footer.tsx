@@ -48,6 +48,7 @@
  * useTranslations  -> next-intl hook to pull translated strings by namespace.
  * motion           -> Framer Motion for the "Back to top" hover animation.
  * -------------------------------------------------------------------------- */
+import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -111,6 +112,22 @@ export function Footer() {
     { label: 'LinkedIn', href: '#' },
     { label: 'Dribbble', href: '#' },
   ];
+
+  const [footerSubscribed, setFooterSubscribed] = useState(false);
+
+  const handleFooterNewsletter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    const email = new FormData(form).get('email');
+    try {
+      await fetch('/api/newsletter', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch { /* ignore */ }
+    setFooterSubscribed(true);
+  };
 
   return (
     <footer className="border-t border-white/5 bg-black">
@@ -246,22 +263,33 @@ export function Footer() {
             <h4 className="text-sm font-medium mb-4 sm:mb-6 text-gray-300">
               {t('newsletter_title')}
             </h4>
-            <form
-              className="flex flex-col sm:flex-row gap-2"
-              onSubmit={(e) => e.preventDefault()}
-            >
-              <input
-                type="email"
-                placeholder={t('newsletter_placeholder')}
-                className="flex-1 min-w-0 px-4 py-2.5 rounded-full bg-white/5 border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-colors"
-              />
-              <button
-                type="submit"
-                className="px-5 py-2.5 rounded-full bg-white text-black text-sm font-medium hover:bg-gray-200 transition-colors whitespace-nowrap"
+            {footerSubscribed ? (
+              <p className="text-green-400 text-sm flex items-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Subscribed!
+              </p>
+            ) : (
+              <form
+                className="flex flex-col sm:flex-row gap-2"
+                onSubmit={handleFooterNewsletter}
               >
-                {t('newsletter_button')}
-              </button>
-            </form>
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  placeholder={t('newsletter_placeholder')}
+                  className="flex-1 min-w-0 px-4 py-2.5 rounded-full bg-white/5 border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-colors"
+                />
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-full bg-white text-black text-sm font-medium hover:bg-gray-200 transition-colors whitespace-nowrap"
+                >
+                  {t('newsletter_button')}
+                </button>
+              </form>
+            )}
           </div>
         </div>
 

@@ -302,6 +302,150 @@ async function runSetup(req: NextRequest) {
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AuditLog_createdAt_idx" ON "AuditLog"("createdAt")`);
     results.push('AuditLog table ready');
 
+    // ── SoftBounceQueue table ──
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "SoftBounceQueue" (
+        "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+        "leadId" TEXT NOT NULL,
+        "campaignId" TEXT,
+        "email" TEXT NOT NULL,
+        "subject" TEXT NOT NULL,
+        "html" TEXT NOT NULL,
+        "retries" INTEGER NOT NULL DEFAULT 0,
+        "nextRetry" TIMESTAMP(3) NOT NULL,
+        "error" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "SoftBounceQueue_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SoftBounceQueue_nextRetry_idx" ON "SoftBounceQueue"("nextRetry")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SoftBounceQueue_leadId_idx" ON "SoftBounceQueue"("leadId")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SoftBounceQueue_retries_nextRetry_idx" ON "SoftBounceQueue"("retries", "nextRetry")`);
+    results.push('SoftBounceQueue table ready');
+
+    // ── DeliverabilitySnapshot table ──
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "DeliverabilitySnapshot" (
+        "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+        "date" TEXT NOT NULL,
+        "totalSent" INTEGER NOT NULL DEFAULT 0,
+        "totalBounced" INTEGER NOT NULL DEFAULT 0,
+        "hardBounces" INTEGER NOT NULL DEFAULT 0,
+        "softBounces" INTEGER NOT NULL DEFAULT 0,
+        "complaints" INTEGER NOT NULL DEFAULT 0,
+        "unsubscribes" INTEGER NOT NULL DEFAULT 0,
+        "opens" INTEGER NOT NULL DEFAULT 0,
+        "clicks" INTEGER NOT NULL DEFAULT 0,
+        "replies" INTEGER NOT NULL DEFAULT 0,
+        "bounceRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "complaintRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "unsubRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "openRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "DeliverabilitySnapshot_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "DeliverabilitySnapshot_date_key" ON "DeliverabilitySnapshot"("date")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DeliverabilitySnapshot_date_idx" ON "DeliverabilitySnapshot"("date")`);
+    results.push('DeliverabilitySnapshot table ready');
+
+    // ── BlacklistCheck table ──
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "BlacklistCheck" (
+        "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+        "target" TEXT NOT NULL,
+        "targetType" TEXT NOT NULL,
+        "clean" BOOLEAN NOT NULL DEFAULT true,
+        "listedOn" TEXT,
+        "totalChecked" INTEGER NOT NULL DEFAULT 0,
+        "checkedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "autoAction" TEXT,
+        CONSTRAINT "BlacklistCheck_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BlacklistCheck_target_idx" ON "BlacklistCheck"("target")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BlacklistCheck_checkedAt_idx" ON "BlacklistCheck"("checkedAt")`);
+    results.push('BlacklistCheck table ready');
+
+    // ── DnsHealthCheck table ──
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "DnsHealthCheck" (
+        "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+        "domain" TEXT NOT NULL,
+        "ip" TEXT,
+        "spfStatus" TEXT NOT NULL DEFAULT 'unknown',
+        "dkimStatus" TEXT NOT NULL DEFAULT 'unknown',
+        "dmarcStatus" TEXT NOT NULL DEFAULT 'unknown',
+        "ptrStatus" TEXT NOT NULL DEFAULT 'unknown',
+        "ptrHostname" TEXT,
+        "mxStatus" TEXT NOT NULL DEFAULT 'unknown',
+        "mxRecords" TEXT,
+        "overall" TEXT NOT NULL DEFAULT 'unknown',
+        "details" TEXT,
+        "checkedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "DnsHealthCheck_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DnsHealthCheck_domain_idx" ON "DnsHealthCheck"("domain")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DnsHealthCheck_checkedAt_idx" ON "DnsHealthCheck"("checkedAt")`);
+    results.push('DnsHealthCheck table ready');
+
+    // ── ListHygieneLog table ──
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "ListHygieneLog" (
+        "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+        "date" TEXT NOT NULL,
+        "action" TEXT NOT NULL,
+        "leadsAffected" INTEGER NOT NULL DEFAULT 0,
+        "details" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "ListHygieneLog_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "ListHygieneLog_date_key" ON "ListHygieneLog"("date")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ListHygieneLog_date_idx" ON "ListHygieneLog"("date")`);
+    results.push('ListHygieneLog table ready');
+
+    // ── CustomFieldDef table ──
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "CustomFieldDef" (
+        "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+        "name" TEXT NOT NULL,
+        "type" TEXT NOT NULL DEFAULT 'text',
+        "options" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "CustomFieldDef_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "CustomFieldDef_name_key" ON "CustomFieldDef"("name")`);
+    results.push('CustomFieldDef table ready');
+
+    // ── SavedView table ──
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "SavedView" (
+        "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+        "name" TEXT NOT NULL,
+        "filters" TEXT NOT NULL DEFAULT '{}',
+        "color" TEXT DEFAULT '#f97316',
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "SavedView_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    results.push('SavedView table ready');
+
+    // ── New columns on Lead (pipeline, custom fields) ──
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "pipelineStage" TEXT DEFAULT 'new'`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "customFields" TEXT DEFAULT '{}'`);
+    results.push('Lead pipeline/custom field columns ready');
+
+    // ── Signature column on SendingAccount ──
+    await prisma.$executeRawUnsafe(`ALTER TABLE "SendingAccount" ADD COLUMN IF NOT EXISTS "signature" TEXT DEFAULT ''`);
+    results.push('SendingAccount signature column ready');
+
+    // ── Branches column on SequenceStep ──
+    await prisma.$executeRawUnsafe(`ALTER TABLE "SequenceStep" ADD COLUMN IF NOT EXISTS "branches" TEXT DEFAULT '[]'`);
+    results.push('SequenceStep branches column ready');
+
     return NextResponse.json({ success: true, results });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);

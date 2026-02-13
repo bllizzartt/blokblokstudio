@@ -1,27 +1,46 @@
 import type { MetadataRoute } from 'next';
+import { getAllProjectSlugs } from '@/data/projects';
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = 'https://blokblokstudio.com';
 
-  const routes = [
+  const mainRoutes = [
     '',
     '/projects',
     '/about',
     '/services',
     '/team',
     '/contact',
-    '/privacy',
-    '/terms',
-    '/cookies',
-    '/data-rights',
+    '/book',
   ];
 
   const legalRoutes = ['/privacy', '/terms', '/cookies', '/data-rights'];
 
-  return routes.map((route) => ({
-    url: `${baseUrl}${route}`,
-    lastModified: new Date(),
-    changeFrequency: route === '' ? 'weekly' : 'monthly',
-    priority: route === '' ? 1 : legalRoutes.includes(route) ? 0.3 : 0.8,
-  }));
+  const projectSlugs = getAllProjectSlugs();
+
+  const entries: MetadataRoute.Sitemap = [
+    // Main pages
+    ...mainRoutes.map((route) => ({
+      url: `${baseUrl}${route}`,
+      lastModified: new Date(),
+      changeFrequency: route === '' ? ('weekly' as const) : ('monthly' as const),
+      priority: route === '' ? 1 : 0.8,
+    })),
+    // Legal pages
+    ...legalRoutes.map((route) => ({
+      url: `${baseUrl}${route}`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly' as const,
+      priority: 0.3,
+    })),
+    // Individual project pages
+    ...projectSlugs.map((slug) => ({
+      url: `${baseUrl}/projects/${slug}`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly' as const,
+      priority: 0.6,
+    })),
+  ];
+
+  return entries;
 }

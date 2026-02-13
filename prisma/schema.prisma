@@ -43,11 +43,17 @@ model Lead {
   lastEngagedAt DateTime? // Last open, click, or reply
   engagementScore Int     @default(0) // 0-100, calculated from activity
 
+  // Pipeline stage for kanban view
+  pipelineStage    String    @default("new")
+
+  // Custom fields (JSON object of field_name: value)
+  customFields     String?   @default("{}")
+
   // GDPR Compliance Fields
   consentGiven     Boolean   @default(false)
   consentTimestamp  DateTime?
   consentIp        String?
-  unsubscribeToken String    @unique @default(cuid())
+  unsubscribeToken String    @unique @default(uuid())
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -87,6 +93,9 @@ model SendingAccount {
   // Warmup config
   warmupEnabled Boolean @default(false)
   warmupDaily   Int     @default(5)  // warmup emails per day
+
+  // Email signature (HTML)
+  signature     String   @default("")
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -148,6 +157,7 @@ model SequenceStep {
   delayDays  Int
   subject    String
   body       String
+  branches   String   @default("[]") // JSON array of conditional branch rules
   createdAt  DateTime @default(now())
 
   @@unique([sequenceId, order])
@@ -354,4 +364,20 @@ model ListHygieneLog {
   createdAt   DateTime @default(now())
 
   @@index([date])
+}
+
+model CustomFieldDef {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  type      String   @default("text") // text, number, date, select, url, email, boolean
+  options   String?  // JSON array for select type
+  createdAt DateTime @default(now())
+}
+
+model SavedView {
+  id        String   @id @default(cuid())
+  name      String
+  filters   String   @default("{}") // JSON filter object
+  color     String   @default("#f97316")
+  createdAt DateTime @default(now())
 }

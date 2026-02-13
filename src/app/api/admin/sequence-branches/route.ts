@@ -41,12 +41,12 @@ export async function GET(req: NextRequest) {
 
   try {
     const steps = await prisma.$queryRawUnsafe<Array<{
-      id: string; stepOrder: number; subject: string; delayDays: number; branches: string | null;
+      id: string; order: number; subject: string; delayDays: number; branches: string | null;
     }>>(
-      `SELECT "id", "stepOrder", "subject", "delayDays", "branches"
+      `SELECT "id", "order", "subject", "delayDays", "branches"
        FROM "SequenceStep"
        WHERE "sequenceId" = $1
-       ORDER BY "stepOrder" ASC`,
+       ORDER BY "order" ASC`,
       sequenceId,
     );
 

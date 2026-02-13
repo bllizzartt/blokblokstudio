@@ -13,12 +13,15 @@ const ENCODING = 'hex';
 
 function getKey(): Buffer {
   const key = process.env.ENCRYPTION_KEY;
-  if (!key || key.length < 32) {
-    // Fallback: derive from ADMIN_PASSWORD if no ENCRYPTION_KEY set
-    const fallback = process.env.ADMIN_PASSWORD || 'default-key-change-me';
-    return crypto.createHash('sha256').update(fallback).digest();
+  if (key && key.length >= 32) {
+    return crypto.createHash('sha256').update(key).digest();
   }
-  return crypto.createHash('sha256').update(key).digest();
+  // Fallback: derive from ADMIN_PASSWORD (no hardcoded default)
+  const fallback = process.env.ADMIN_PASSWORD;
+  if (!fallback) {
+    throw new Error('ENCRYPTION_KEY (32+ chars) or ADMIN_PASSWORD must be set for credential encryption');
+  }
+  return crypto.createHash('sha256').update(fallback).digest();
 }
 
 /**
