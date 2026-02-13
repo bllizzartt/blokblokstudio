@@ -355,11 +355,16 @@ export function AdminDashboard() {
   const [dnsCheckResult, setDnsCheckResult] = useState<Record<string, { status: string; found: string; expected?: string }> | null>(null);
 
   // Inbox
-  const [inboxMessages, setInboxMessages] = useState<{ id: string; fromEmail: string; toEmail: string; subject: string; bodyPreview: string; isAutoReply: boolean; isOOO: boolean; read: boolean; leadId: string | null; receivedAt: string }[]>([]);
+  const [inboxMessages, setInboxMessages] = useState<{ id: string; fromEmail: string; toEmail: string; subject: string; bodyPreview: string; isAutoReply: boolean; isOOO: boolean; read: boolean; leadId: string | null; receivedAt: string; accountId: string }[]>([]);
   const [inboxUnread, setInboxUnread] = useState(0);
   const [inboxFilter, setInboxFilter] = useState('all');
   const [inboxPage, setInboxPage] = useState(1);
   const [inboxPages, setInboxPages] = useState(0);
+  const [selectedInboxMsg, setSelectedInboxMsg] = useState<typeof inboxMessages[0] | null>(null);
+  const [inboxSearch, setInboxSearch] = useState('');
+  const [inboxThread, setInboxThread] = useState<typeof inboxMessages>([]);
+  const [replyBody, setReplyBody] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
 
   // Warmup data
   const [warmupData, setWarmupData] = useState<{ id: string; email: string; label: string; warmupEnabled: boolean; warmupDaily: number; warmupPhase: number; dailyLimit: number; daysSinceStart: number; sendWindowStart: number; sendWindowEnd: number; sendWeekdays: string; stats: { totalWarmupSent: number; totalInbox: number; totalSpam: number; inboxRate: number; recentInboxRate: number; totalSent: number; totalBounced: number; bounceRate: number }; warmupLogs: { date: string; sent: number; received: number; inbox: number; spam: number }[] }[]>([]);
@@ -422,8 +427,9 @@ export function AdminDashboard() {
 
   // Pipeline / Kanban
   const [pipelineStages, setPipelineStages] = useState<{ id: string; label: string; color: string }[]>([]);
-  const [pipelineData, setPipelineData] = useState<Record<string, Array<{ id: string; name: string; email: string; field: string; status: string; pipelineStage: string | null; tags: string | null; createdAt: string; emailsSent: number; bounceCount: number; website: string | null }>>>({});
+  const [pipelineData, setPipelineData] = useState<Record<string, Array<{ id: string; name: string; email: string; field: string; status: string; pipelineStage: string | null; tags: string | null; createdAt: string; emailsSent: number; bounceCount: number; website: string | null; problem?: string | null; lastEmailAt?: string | null }>>>({});
   const [draggingLead, setDraggingLead] = useState<string | null>(null);
+  const [pipelineSearch, setPipelineSearch] = useState('');
 
   // Settings sub-tab
   const [settingsTab, setSettingsTab] = useState<'auto-tags' | 'dedup' | 'signatures' | 'custom-fields' | 'saved-views' | 'branching'>('auto-tags');
@@ -458,10 +464,18 @@ export function AdminDashboard() {
   const [branchSequenceId, setBranchSequenceId] = useState<string | null>(null);
 
   // Analytics charts
-  const [chartRange, setChartRange] = useState<'7d' | '30d' | '90d'>('30d');
+  const [chartRange, setChartRange] = useState<'7d' | '30d' | '90d' | 'custom'>('30d');
   const [leadsChartData, setLeadsChartData] = useState<{date: string; count: number}[]>([]);
   const [emailsChartData, setEmailsChartData] = useState<{date: string; sent: number; opened: number; clicked: number; replied: number}[]>([]);
-  const [campaignAnalytics, setCampaignAnalytics] = useState<{id: string; subject: string; sentTo: number; openRate: string; clickRate: string; replyRate: string; bounceRate: string}[]>([]);
+  const [campaignAnalytics, setCampaignAnalytics] = useState<{id: string; subject: string; sentTo: number; openRate: string; clickRate: string; replyRate: string; bounceRate: string; hasVariants?: boolean}[]>([]);
+  const [analyticsSummary, setAnalyticsSummary] = useState<{ totalSent: number; avgOpenRate: string; avgClickRate: string; avgReplyRate: string; avgBounceRate: string } | null>(null);
+  const [customDateFrom, setCustomDateFrom] = useState('');
+  const [customDateTo, setCustomDateTo] = useState('');
+  const [analyticsSortBy, setAnalyticsSortBy] = useState<string>('sentAt');
+  const [analyticsSortDir, setAnalyticsSortDir] = useState<'asc' | 'desc'>('desc');
+
+  // Compose — preheader
+  const [preheader, setPreheader] = useState('');
 
   const EMAIL_PROVIDERS: Record<string, { label: string; smtpHost: string; smtpPort: number; instructions: string[] }> = {
     'google': {
@@ -721,9 +735,11 @@ export function AdminDashboard() {
     } catch { /* silently fail */ }
   }, [headers]);
 
-  const fetchInbox = useCallback(async (page = 1, filter = 'all') => {
+  const fetchInbox = useCallback(async (page = 1, filter = 'all', search = '') => {
     try {
-      const res = await fetch(`/api/admin/inbox?page=${page}&filter=${filter}`, { headers: headers() });
+      const params = new URLSearchParams({ page: String(page), filter });
+      if (search) params.set('search', search);
+      const res = await fetch(`/api/admin/inbox?${params}`, { headers: headers() });
       if (res.ok) {
         const data = await res.json();
         setInboxMessages(data.messages || []);
@@ -732,6 +748,39 @@ export function AdminDashboard() {
       }
     } catch { /* silently fail */ }
   }, [headers]);
+
+  const fetchInboxThread = useCallback(async (email: string) => {
+    try {
+      const res = await fetch(`/api/admin/inbox?thread=${encodeURIComponent(email)}`, { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        setInboxThread(data.thread || []);
+      }
+    } catch { setInboxThread([]); }
+  }, [headers]);
+
+  const sendReply = useCallback(async (inboxMessageId: string) => {
+    if (!replyBody.trim()) return;
+    setSendingReply(true);
+    try {
+      const res = await fetch('/api/admin/inbox/reply', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ inboxMessageId, body: replyBody }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('success', `Reply sent to ${data.sentTo}`);
+        setReplyBody('');
+        fetchInbox(inboxPage, inboxFilter, inboxSearch);
+      } else {
+        showToast('error', data.error || 'Failed to send reply');
+      }
+    } catch {
+      showToast('error', 'Failed to send reply');
+    }
+    setSendingReply(false);
+  }, [replyBody, headers, showToast, fetchInbox, inboxPage, inboxFilter, inboxSearch]);
 
   const fetchWarmupData = useCallback(async () => {
     try {
@@ -871,9 +920,10 @@ export function AdminDashboard() {
   };
 
   // Pipeline
-  const fetchPipeline = useCallback(async () => {
+  const fetchPipeline = useCallback(async (search = '') => {
     try {
-      const res = await fetch('/api/admin/pipeline', { headers: headers() });
+      const params = search ? `?search=${encodeURIComponent(search)}` : '';
+      const res = await fetch(`/api/admin/pipeline${params}`, { headers: headers() });
       if (res.ok) {
         const data = await res.json();
         setPipelineStages(data.stages || []);
@@ -1013,16 +1063,21 @@ export function AdminDashboard() {
     } catch { /* ignore */ }
   }, [headers]);
 
-  const fetchAnalytics = useCallback(async (range = '30d') => {
+  const fetchAnalytics = useCallback(async (range: string = '30d', from?: string, to?: string) => {
     try {
-      const [leadsRes, emailsRes, campaignsRes] = await Promise.all([
-        fetch(`/api/admin/analytics?view=leads&range=${range}`, { headers: headers() }),
-        fetch(`/api/admin/analytics?view=emails&range=${range}`, { headers: headers() }),
+      const rangeParams = range === 'custom' && from && to
+        ? `range=custom&from=${from}&to=${to}`
+        : `range=${range}`;
+      const [leadsRes, emailsRes, campaignsRes, summaryRes] = await Promise.all([
+        fetch(`/api/admin/analytics?view=leads&${rangeParams}`, { headers: headers() }),
+        fetch(`/api/admin/analytics?view=emails&${rangeParams}`, { headers: headers() }),
         fetch(`/api/admin/analytics?view=campaigns`, { headers: headers() }),
+        fetch(`/api/admin/analytics?view=summary&${rangeParams}`, { headers: headers() }),
       ]);
       if (leadsRes.ok) { const d = await leadsRes.json(); setLeadsChartData(d.data || []); }
       if (emailsRes.ok) { const d = await emailsRes.json(); setEmailsChartData(d.data || []); }
       if (campaignsRes.ok) { const d = await campaignsRes.json(); setCampaignAnalytics(d.campaigns || []); }
+      if (summaryRes.ok) { const d = await summaryRes.json(); setAnalyticsSummary(d); }
     } catch { /* silently fail */ }
   }, [headers]);
 
@@ -1363,6 +1418,7 @@ export function AdminDashboard() {
       }
 
       const payload: Record<string, unknown> = { subject, body, leadIds };
+      if (preheader.trim()) payload.preheader = preheader.trim();
       if (scheduleEnabled && scheduledAt) {
         payload.scheduledAt = new Date(scheduledAt).toISOString();
       }
@@ -1757,16 +1813,27 @@ export function AdminDashboard() {
               <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold">Leads Over Time</h3>
-                  <div className="flex gap-1">
-                    {(['7d', '30d', '90d'] as const).map(r => (
+                  <div className="flex items-center gap-1">
+                    {(['7d', '30d', '90d', 'custom'] as const).map(r => (
                       <button
                         key={r}
-                        onClick={() => { setChartRange(r); fetchAnalytics(r); }}
+                        onClick={() => {
+                          setChartRange(r);
+                          if (r !== 'custom') fetchAnalytics(r);
+                        }}
                         className={`px-3 py-1 rounded-lg text-xs ${chartRange === r ? 'bg-orange-500/20 text-orange-400' : 'bg-white/[0.03] text-gray-500 hover:text-gray-300'}`}
                       >
-                        {r}
+                        {r === 'custom' ? 'Custom' : r}
                       </button>
                     ))}
+                    {chartRange === 'custom' && (
+                      <div className="flex items-center gap-1 ml-2">
+                        <input type="date" value={customDateFrom} onChange={e => setCustomDateFrom(e.target.value)} className="px-2 py-1 rounded-lg bg-white/[0.03] border border-white/5 text-xs text-gray-300" />
+                        <span className="text-gray-600 text-xs">to</span>
+                        <input type="date" value={customDateTo} onChange={e => setCustomDateTo(e.target.value)} className="px-2 py-1 rounded-lg bg-white/[0.03] border border-white/5 text-xs text-gray-300" />
+                        <button onClick={() => { if (customDateFrom && customDateTo) fetchAnalytics('custom', customDateFrom, customDateTo); }} className="px-2 py-1 rounded-lg bg-orange-500/20 text-orange-400 text-xs">Go</button>
+                      </div>
+                    )}
                   </div>
                 </div>
                 {leadsChartData.length > 0 ? (
@@ -3468,14 +3535,30 @@ export function AdminDashboard() {
 
                 {/* Subject */}
                 <div>
-                  <label className="block text-xs text-gray-500 uppercase tracking-wider mb-2">Subject Line</label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs text-gray-500 uppercase tracking-wider">Subject Line</label>
+                    {subject.length > 60 && <span className="text-[10px] text-yellow-400">{subject.length} chars — may get truncated in inbox</span>}
+                    {subject.length > 0 && subject.length <= 60 && <span className="text-[10px] text-green-500">{subject.length}/60</span>}
+                  </div>
                   <input
                     type="text"
                     required
                     placeholder="e.g. Your free audit is ready, {{name}}!"
                     value={subject}
                     onChange={e => setSubject(e.target.value)}
-                    className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30 focus:ring-1 focus:ring-orange-500/10 transition-all"
+                    className={`w-full bg-white/[0.03] border rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-1 transition-all ${subject.length > 60 ? 'border-yellow-500/30 focus:border-yellow-500/40 focus:ring-yellow-500/10' : 'border-white/5 focus:border-orange-500/30 focus:ring-orange-500/10'}`}
+                  />
+                </div>
+
+                {/* Preheader */}
+                <div>
+                  <label className="block text-xs text-gray-500 uppercase tracking-wider mb-2">Preview Text <span className="normal-case text-gray-600">(shows in inbox next to subject)</span></label>
+                  <input
+                    type="text"
+                    placeholder="e.g. We found 3 issues on your website that are costing you leads..."
+                    value={preheader}
+                    onChange={e => setPreheader(e.target.value)}
+                    className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30 transition-all"
                   />
                 </div>
 
@@ -3709,7 +3792,13 @@ export function AdminDashboard() {
                                 value={v.weight}
                                 onChange={e => {
                                   const updated = [...abVariants];
-                                  updated[i].weight = parseInt(e.target.value);
+                                  const newWeight = parseInt(e.target.value);
+                                  updated[i].weight = newWeight;
+                                  // Auto-normalize: distribute remaining weight equally among others
+                                  const others = updated.filter((_, idx) => idx !== i);
+                                  const remaining = Math.max(0, 100 - newWeight);
+                                  const perOther = Math.round(remaining / others.length);
+                                  others.forEach((o, idx) => { o.weight = idx === others.length - 1 ? remaining - perOther * (others.length - 1) : perOther; });
                                   setAbVariants(updated);
                                 }}
                                 className="w-20 accent-purple-500"
@@ -3782,14 +3871,54 @@ export function AdminDashboard() {
                     </button>
                   </div>
                   {scheduleEnabled && (
-                    <div className="mt-4">
-                      <input
-                        type="datetime-local"
-                        value={scheduledAt}
-                        onChange={e => setScheduledAt(e.target.value)}
-                        min={new Date().toISOString().slice(0, 16)}
-                        className="w-full sm:w-auto bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-orange-500/30 transition-all"
-                      />
+                    <div className="mt-4 space-y-3">
+                      {/* Quick presets */}
+                      <div className="flex flex-wrap gap-2">
+                        {(() => {
+                          const presets: { label: string; getDate: () => Date }[] = [];
+                          const now = new Date();
+                          const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
+                          presets.push({ label: 'Tomorrow 9am', getDate: () => { const d = new Date(tomorrow); d.setHours(9, 0, 0, 0); return d; } });
+                          presets.push({ label: 'Tomorrow 2pm', getDate: () => { const d = new Date(tomorrow); d.setHours(14, 0, 0, 0); return d; } });
+                          // Next Monday
+                          const nextMon = new Date(now);
+                          nextMon.setDate(nextMon.getDate() + ((8 - nextMon.getDay()) % 7 || 7));
+                          presets.push({ label: 'Monday 9am', getDate: () => { const d = new Date(nextMon); d.setHours(9, 0, 0, 0); return d; } });
+                          presets.push({ label: 'Next week 10am', getDate: () => { const d = new Date(now); d.setDate(d.getDate() + 7); d.setHours(10, 0, 0, 0); return d; } });
+                          return presets.map(p => (
+                            <button
+                              key={p.label}
+                              type="button"
+                              onClick={() => {
+                                const d = p.getDate();
+                                setScheduledAt(d.toISOString().slice(0, 16));
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/5 text-xs text-gray-400 hover:text-orange-400 hover:border-orange-500/20"
+                            >
+                              {p.label}
+                            </button>
+                          ));
+                        })()}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="datetime-local"
+                          value={scheduledAt}
+                          onChange={e => setScheduledAt(e.target.value)}
+                          min={new Date().toISOString().slice(0, 16)}
+                          className="w-full sm:w-auto bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-orange-500/30 transition-all"
+                        />
+                        {scheduledAt && (
+                          <span className="text-xs text-gray-500">
+                            Sends {new Date(scheduledAt).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}
+                          </span>
+                        )}
+                      </div>
+                      {scheduledAt && (() => {
+                        const h = new Date(scheduledAt).getHours();
+                        if (h < 8 || h >= 18) return <p className="text-[11px] text-yellow-400">Warning: Scheduled outside business hours (8am-6pm) — may have lower open rates</p>;
+                        return null;
+                      })()}
                     </div>
                   )}
                 </div>
@@ -5014,40 +5143,80 @@ export function AdminDashboard() {
                   )}
                 </div>
               )}
-              {/* Campaign Performance Comparison */}
-              {campaignAnalytics.length > 0 && (
-                <div className="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
-                  <div className="p-4 border-b border-white/5">
-                    <h3 className="font-semibold">Campaign Performance</h3>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-white/[0.03] border-b border-white/5">
-                          <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium uppercase tracking-wider">Campaign</th>
-                          <th className="px-4 py-3 text-right text-xs text-gray-500 font-medium uppercase tracking-wider">Sent</th>
-                          <th className="px-4 py-3 text-right text-xs text-gray-500 font-medium uppercase tracking-wider">Open %</th>
-                          <th className="px-4 py-3 text-right text-xs text-gray-500 font-medium uppercase tracking-wider">Click %</th>
-                          <th className="px-4 py-3 text-right text-xs text-gray-500 font-medium uppercase tracking-wider">Reply %</th>
-                          <th className="px-4 py-3 text-right text-xs text-gray-500 font-medium uppercase tracking-wider">Bounce %</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {campaignAnalytics.map(c => (
-                          <tr key={c.id} className="border-b border-white/5 hover:bg-white/[0.02]">
-                            <td className="px-4 py-3 text-gray-200 truncate max-w-[200px]">{c.subject}</td>
-                            <td className="px-4 py-3 text-right text-gray-400">{c.sentTo}</td>
-                            <td className="px-4 py-3 text-right text-blue-400">{c.openRate}%</td>
-                            <td className="px-4 py-3 text-right text-purple-400">{c.clickRate}%</td>
-                            <td className="px-4 py-3 text-right text-orange-400">{c.replyRate}%</td>
-                            <td className="px-4 py-3 text-right text-red-400">{c.bounceRate}%</td>
+              {/* Campaign Performance Comparison — Sortable + Color-coded + CSV Export */}
+              {campaignAnalytics.length > 0 && (() => {
+                const rateColor = (v: string, type: 'open' | 'click' | 'reply' | 'bounce') => {
+                  const n = parseFloat(v);
+                  if (type === 'bounce') return n > 5 ? 'text-red-400' : n > 2 ? 'text-yellow-400' : 'text-green-400';
+                  return n >= 20 ? 'text-green-400' : n >= 10 ? 'text-yellow-400' : n > 0 ? 'text-orange-400' : 'text-gray-500';
+                };
+                const sortKey = analyticsSortBy as keyof typeof campaignAnalytics[0];
+                const sorted = [...campaignAnalytics].sort((a, b) => {
+                  const av = sortKey === 'sentTo' ? Number(a[sortKey]) : parseFloat(String(a[sortKey] || '0'));
+                  const bv = sortKey === 'sentTo' ? Number(b[sortKey]) : parseFloat(String(b[sortKey] || '0'));
+                  return analyticsSortDir === 'asc' ? av - bv : bv - av;
+                });
+                const toggleSort = (key: string) => {
+                  if (analyticsSortBy === key) setAnalyticsSortDir(d => d === 'asc' ? 'desc' : 'asc');
+                  else { setAnalyticsSortBy(key); setAnalyticsSortDir('desc'); }
+                };
+                const exportCSV = () => {
+                  const rows = [['Campaign', 'Sent', 'Open %', 'Click %', 'Reply %', 'Bounce %', 'A/B']];
+                  campaignAnalytics.forEach(c => rows.push([c.subject, String(c.sentTo), c.openRate, c.clickRate, c.replyRate, c.bounceRate, c.hasVariants ? 'Yes' : 'No']));
+                  const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const a = document.createElement('a');
+                  a.href = URL.createObjectURL(blob);
+                  a.download = `campaign-analytics-${new Date().toISOString().slice(0, 10)}.csv`;
+                  a.click();
+                };
+
+                return (
+                  <div className="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+                    <div className="p-4 border-b border-white/5 flex items-center justify-between">
+                      <h3 className="font-semibold">Campaign Performance</h3>
+                      <button onClick={exportCSV} className="px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/5 text-xs text-gray-400 hover:text-orange-400">
+                        Export CSV
+                      </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-white/[0.03] border-b border-white/5">
+                            <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium uppercase tracking-wider">Campaign</th>
+                            {[
+                              { key: 'sentTo', label: 'Sent' },
+                              { key: 'openRate', label: 'Open %' },
+                              { key: 'clickRate', label: 'Click %' },
+                              { key: 'replyRate', label: 'Reply %' },
+                              { key: 'bounceRate', label: 'Bounce %' },
+                            ].map(col => (
+                              <th key={col.key} onClick={() => toggleSort(col.key)} className="px-4 py-3 text-right text-xs text-gray-500 font-medium uppercase tracking-wider cursor-pointer hover:text-orange-400 select-none">
+                                {col.label} {analyticsSortBy === col.key ? (analyticsSortDir === 'asc' ? '↑' : '↓') : ''}
+                              </th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {sorted.map(c => (
+                            <tr key={c.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                              <td className="px-4 py-3 text-gray-200 truncate max-w-[200px]">
+                                {c.subject}
+                                {c.hasVariants && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">A/B</span>}
+                              </td>
+                              <td className="px-4 py-3 text-right text-gray-400">{c.sentTo}</td>
+                              <td className={`px-4 py-3 text-right font-medium ${rateColor(c.openRate, 'open')}`}>{c.openRate}%</td>
+                              <td className={`px-4 py-3 text-right font-medium ${rateColor(c.clickRate, 'click')}`}>{c.clickRate}%</td>
+                              <td className={`px-4 py-3 text-right font-medium ${rateColor(c.replyRate, 'reply')}`}>{c.replyRate}%</td>
+                              <td className={`px-4 py-3 text-right font-medium ${rateColor(c.bounceRate, 'bounce')}`}>{c.bounceRate}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
 
@@ -5485,7 +5654,8 @@ export function AdminDashboard() {
 
           {/* ── INBOX TAB ── */}
           {tab === 'inbox' && (
-            <div className="space-y-6">
+            <div className="space-y-4">
+              {/* Header */}
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-bold">Unified Inbox</h2>
@@ -5499,7 +5669,7 @@ export function AdminDashboard() {
                       const data = await res.json();
                       if (res.ok) {
                         showToast('success', data.message);
-                        fetchInbox(1, inboxFilter);
+                        fetchInbox(1, inboxFilter, inboxSearch);
                       }
                     }}
                     className="px-4 py-2 rounded-xl bg-blue-500/10 text-blue-400 text-sm hover:bg-blue-500/20"
@@ -5514,7 +5684,7 @@ export function AdminDashboard() {
                           headers: headers(),
                           body: JSON.stringify({ action: 'markAllRead' }),
                         });
-                        fetchInbox(1, inboxFilter);
+                        fetchInbox(1, inboxFilter, inboxSearch);
                       }}
                       className="px-4 py-2 rounded-xl bg-white/[0.03] border border-white/5 text-gray-400 text-sm hover:border-white/10"
                     >
@@ -5524,8 +5694,19 @@ export function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Filters */}
-              <div className="flex gap-2">
+              {/* Search + Filters */}
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1 max-w-sm">
+                  <input
+                    type="text"
+                    placeholder="Search emails, subjects..."
+                    value={inboxSearch}
+                    onChange={e => { setInboxSearch(e.target.value); }}
+                    onKeyDown={e => { if (e.key === 'Enter') { setInboxPage(1); fetchInbox(1, inboxFilter, inboxSearch); } }}
+                    className="w-full px-4 py-2 pl-9 rounded-xl bg-white/[0.03] border border-white/5 text-sm focus:border-orange-500/30 outline-none"
+                  />
+                  <svg className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                </div>
                 {[
                   { value: 'all', label: 'All' },
                   { value: 'unread', label: 'Unread' },
@@ -5534,8 +5715,8 @@ export function AdminDashboard() {
                 ].map(f => (
                   <button
                     key={f.value}
-                    onClick={() => { setInboxFilter(f.value); setInboxPage(1); fetchInbox(1, f.value); }}
-                    className={`px-4 py-2 rounded-xl text-sm transition-all ${
+                    onClick={() => { setInboxFilter(f.value); setInboxPage(1); fetchInbox(1, f.value, inboxSearch); }}
+                    className={`px-3 py-2 rounded-xl text-xs transition-all whitespace-nowrap ${
                       inboxFilter === f.value
                         ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
                         : 'bg-white/[0.02] text-gray-400 border border-white/5 hover:border-white/10'
@@ -5552,65 +5733,165 @@ export function AdminDashboard() {
                   <p className="text-xs text-gray-600">Configure IMAP on your accounts and click &quot;Check Now&quot; to fetch replies</p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {inboxMessages.map(msg => (
-                    <div
-                      key={msg.id}
-                      className={`rounded-xl border p-4 transition-all ${
-                        msg.read ? 'bg-white/[0.01] border-white/5' : 'bg-white/[0.03] border-orange-500/20'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            {!msg.read && <span className="w-2 h-2 rounded-full bg-orange-500 flex-shrink-0" />}
-                            <span className="font-medium text-sm truncate">{msg.fromEmail}</span>
-                            {msg.isAutoReply && <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400">Auto-Reply</span>}
-                            {msg.isOOO && <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400">OOO</span>}
-                            {msg.leadId && <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-400">Lead Match</span>}
-                          </div>
-                          <p className="text-sm text-gray-300 mb-1">{msg.subject}</p>
-                          <p className="text-xs text-gray-500 line-clamp-2">{msg.bodyPreview}</p>
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-4" style={{ minHeight: '500px' }}>
+                  {/* Left Panel — Message List */}
+                  <div className="lg:col-span-2 space-y-1 overflow-y-auto" style={{ maxHeight: '70vh' }}>
+                    {inboxMessages.map(msg => (
+                      <div
+                        key={msg.id}
+                        onClick={() => {
+                          setSelectedInboxMsg(msg);
+                          setReplyBody('');
+                          fetchInboxThread(msg.fromEmail);
+                          if (!msg.read) {
+                            fetch('/api/admin/inbox', {
+                              method: 'PATCH', headers: headers(),
+                              body: JSON.stringify({ action: 'markRead', messageIds: [msg.id] }),
+                            }).then(() => fetchInbox(inboxPage, inboxFilter, inboxSearch));
+                          }
+                        }}
+                        className={`rounded-xl border p-3 cursor-pointer transition-all ${
+                          selectedInboxMsg?.id === msg.id
+                            ? 'bg-orange-500/5 border-orange-500/30'
+                            : msg.read ? 'bg-white/[0.01] border-white/5 hover:border-white/10' : 'bg-white/[0.03] border-orange-500/20 hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          {!msg.read && <span className="w-2 h-2 rounded-full bg-orange-500 flex-shrink-0" />}
+                          <span className={`text-sm truncate ${!msg.read ? 'font-semibold' : 'font-medium text-gray-300'}`}>{msg.fromEmail}</span>
                         </div>
-                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                          <span className="text-[10px] text-gray-500">{new Date(msg.receivedAt).toLocaleString()}</span>
-                          <button
-                            onClick={async () => {
-                              await fetch('/api/admin/inbox', {
-                                method: 'PATCH',
-                                headers: headers(),
-                                body: JSON.stringify({
-                                  action: msg.read ? 'markUnread' : 'markRead',
-                                  [msg.read ? 'messageId' : 'messageIds']: msg.read ? msg.id : [msg.id],
-                                }),
-                              });
-                              fetchInbox(inboxPage, inboxFilter);
-                            }}
-                            className="text-[10px] text-gray-500 hover:text-orange-400"
-                          >
-                            {msg.read ? 'Mark Unread' : 'Mark Read'}
-                          </button>
+                        <p className="text-xs text-gray-300 truncate mb-0.5">{msg.subject}</p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] text-gray-500 truncate flex-1">{msg.bodyPreview?.slice(0, 60)}</p>
+                          <span className="text-[10px] text-gray-600 flex-shrink-0 ml-2">{new Date(msg.receivedAt).toLocaleDateString()}</span>
+                        </div>
+                        <div className="flex gap-1 mt-1">
+                          {msg.isAutoReply && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400">Auto</span>}
+                          {msg.isOOO && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400">OOO</span>}
+                          {msg.leadId && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-400">Lead</span>}
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
 
-                  {/* Pagination */}
-                  {inboxPages > 1 && (
-                    <div className="flex justify-center gap-2 pt-4">
-                      {Array.from({ length: inboxPages }, (_, i) => (
-                        <button
-                          key={i}
-                          onClick={() => { setInboxPage(i + 1); fetchInbox(i + 1, inboxFilter); }}
-                          className={`w-8 h-8 rounded-lg text-xs ${
-                            inboxPage === i + 1 ? 'bg-orange-500 text-white' : 'bg-white/[0.03] text-gray-400 hover:bg-white/5'
-                          }`}
-                        >
-                          {i + 1}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                    {/* Pagination */}
+                    {inboxPages > 1 && (
+                      <div className="flex justify-center gap-1 pt-3">
+                        {Array.from({ length: Math.min(inboxPages, 8) }, (_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => { setInboxPage(i + 1); fetchInbox(i + 1, inboxFilter, inboxSearch); }}
+                            className={`w-7 h-7 rounded-lg text-xs ${
+                              inboxPage === i + 1 ? 'bg-orange-500 text-white' : 'bg-white/[0.03] text-gray-400 hover:bg-white/5'
+                            }`}
+                          >
+                            {i + 1}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right Panel — Message Detail + Reply Composer */}
+                  <div className="lg:col-span-3 flex flex-col">
+                    {!selectedInboxMsg ? (
+                      <div className="flex-1 flex items-center justify-center rounded-2xl bg-white/[0.02] border border-white/5">
+                        <div className="text-center">
+                          <p className="text-gray-500 text-lg mb-1">Select a message</p>
+                          <p className="text-xs text-gray-600">Click a message on the left to view details and reply</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col flex-1 rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+                        {/* Message Header */}
+                        <div className="p-4 border-b border-white/5">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h3 className="font-semibold text-lg">{selectedInboxMsg.subject}</h3>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-sm text-gray-400">From: <span className="text-gray-200">{selectedInboxMsg.fromEmail}</span></span>
+                                <span className="text-gray-600">→</span>
+                                <span className="text-sm text-gray-400">To: <span className="text-gray-200">{selectedInboxMsg.toEmail}</span></span>
+                              </div>
+                              <span className="text-xs text-gray-500 mt-1 block">{new Date(selectedInboxMsg.receivedAt).toLocaleString()}</span>
+                            </div>
+                            <div className="flex gap-1.5">
+                              {selectedInboxMsg.isAutoReply && <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400">Auto-Reply</span>}
+                              {selectedInboxMsg.isOOO && <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400">OOO</span>}
+                              {selectedInboxMsg.leadId && <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-400">Lead Match</span>}
+                              <button
+                                onClick={async () => {
+                                  await fetch('/api/admin/inbox', {
+                                    method: 'PATCH', headers: headers(),
+                                    body: JSON.stringify({ action: selectedInboxMsg.read ? 'markUnread' : 'markRead', [selectedInboxMsg.read ? 'messageId' : 'messageIds']: selectedInboxMsg.read ? selectedInboxMsg.id : [selectedInboxMsg.id] }),
+                                  });
+                                  fetchInbox(inboxPage, inboxFilter, inboxSearch);
+                                }}
+                                className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.03] text-gray-400 hover:text-orange-400"
+                              >
+                                {selectedInboxMsg.read ? 'Mark Unread' : 'Mark Read'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Thread / Message Body */}
+                        <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ maxHeight: '35vh' }}>
+                          {inboxThread.length > 1 ? (
+                            inboxThread.map((tm, idx) => (
+                              <div key={tm.id} className={`rounded-xl p-3 ${tm.id === selectedInboxMsg.id ? 'bg-orange-500/5 border border-orange-500/20' : 'bg-white/[0.02] border border-white/5'}`}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-medium text-gray-300">{tm.fromEmail}</span>
+                                  <span className="text-[10px] text-gray-500">{new Date(tm.receivedAt).toLocaleString()}</span>
+                                </div>
+                                <p className="text-sm text-gray-300 whitespace-pre-wrap">{tm.bodyPreview}</p>
+                                {idx === 0 && inboxThread.length > 1 && <p className="text-[10px] text-gray-600 mt-2">Thread: {inboxThread.length} messages</p>}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="rounded-xl bg-white/[0.02] border border-white/5 p-4">
+                              <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{selectedInboxMsg.bodyPreview}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Reply Composer */}
+                        <div className="border-t border-white/5 p-4">
+                          <div className="mb-2">
+                            <span className="text-xs text-gray-500">Replying to {selectedInboxMsg.fromEmail}</span>
+                          </div>
+                          <textarea
+                            value={replyBody}
+                            onChange={e => setReplyBody(e.target.value)}
+                            placeholder="Type your reply..."
+                            rows={4}
+                            className="w-full px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5 text-sm resize-none focus:border-orange-500/30 outline-none"
+                          />
+                          {/* Quick merge tags if lead match */}
+                          {selectedInboxMsg.leadId && (
+                            <div className="flex gap-1 mt-1 mb-2">
+                              {['{{name}}', '{{field}}', '{{website}}', '{{problem}}'].map(tag => (
+                                <button key={tag} onClick={() => setReplyBody(b => b + tag)} className="text-[10px] px-2 py-0.5 rounded bg-white/[0.03] text-gray-500 hover:text-orange-400">{tag}</button>
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between mt-2">
+                            <span className="text-[10px] text-gray-600">Signature will be auto-appended from account settings</span>
+                            <button
+                              onClick={() => sendReply(selectedInboxMsg.id)}
+                              disabled={sendingReply || !replyBody.trim()}
+                              className="px-5 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-medium hover:opacity-90 disabled:opacity-30 flex items-center gap-2"
+                            >
+                              {sendingReply ? (
+                                <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Sending...</>
+                              ) : (
+                                <>Send Reply</>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -5618,27 +5899,41 @@ export function AdminDashboard() {
 
           {/* ── PIPELINE TAB (Kanban Board) ── */}
           {tab === 'pipeline' && (
-            <div className="space-y-6">
+            <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-bold">Sales Pipeline</h2>
                   <p className="text-sm text-gray-500 mt-1">Drag leads across stages to track your sales process</p>
                 </div>
-                <button onClick={fetchPipeline} className="px-4 py-2 rounded-xl bg-orange-500/10 text-orange-400 text-sm hover:bg-orange-500/20">
-                  Refresh
-                </button>
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search pipeline..."
+                      value={pipelineSearch}
+                      onChange={e => setPipelineSearch(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') fetchPipeline(pipelineSearch); }}
+                      className="px-4 py-2 pl-9 rounded-xl bg-white/[0.03] border border-white/5 text-sm focus:border-orange-500/30 outline-none w-56"
+                    />
+                    <svg className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  </div>
+                  <button onClick={() => fetchPipeline(pipelineSearch)} className="px-4 py-2 rounded-xl bg-orange-500/10 text-orange-400 text-sm hover:bg-orange-500/20">
+                    Refresh
+                  </button>
+                </div>
               </div>
 
-              <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: '70vh' }}>
+              <div className="flex gap-3 overflow-x-auto pb-4" style={{ minHeight: '70vh' }}>
                 {pipelineStages.map(stage => (
                   <div
                     key={stage.id}
-                    className="flex-shrink-0 w-72 bg-[#111] rounded-2xl border border-white/5 flex flex-col"
-                    onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('border-orange-500/30'); }}
-                    onDragLeave={e => { e.currentTarget.classList.remove('border-orange-500/30'); }}
+                    className="flex-shrink-0 w-72 bg-[#111] rounded-2xl border border-white/5 flex flex-col transition-all"
+                    onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = stage.color; e.currentTarget.style.boxShadow = `0 0 20px ${stage.color}20`; }}
+                    onDragLeave={e => { e.currentTarget.style.borderColor = ''; e.currentTarget.style.boxShadow = ''; }}
                     onDrop={e => {
                       e.preventDefault();
-                      e.currentTarget.classList.remove('border-orange-500/30');
+                      e.currentTarget.style.borderColor = '';
+                      e.currentTarget.style.boxShadow = '';
                       if (draggingLead) movePipelineLead(draggingLead, stage.id);
                       setDraggingLead(null);
                     }}
@@ -5648,7 +5943,7 @@ export function AdminDashboard() {
                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: stage.color }} />
                         <span className="font-semibold text-sm">{stage.label}</span>
                       </div>
-                      <span className="text-xs text-gray-500 bg-white/5 px-2 py-0.5 rounded-full">
+                      <span className="text-xs font-medium px-2.5 py-0.5 rounded-full" style={{ backgroundColor: stage.color + '20', color: stage.color }}>
                         {(pipelineData[stage.id] || []).length}
                       </span>
                     </div>
@@ -5659,7 +5954,7 @@ export function AdminDashboard() {
                           draggable
                           onDragStart={() => setDraggingLead(lead.id)}
                           onDragEnd={() => setDraggingLead(null)}
-                          className={`p-3 rounded-xl bg-white/[0.02] border border-white/5 cursor-grab active:cursor-grabbing hover:border-white/10 transition-all ${
+                          className={`group p-3 rounded-xl bg-white/[0.02] border border-white/5 cursor-grab active:cursor-grabbing hover:border-white/10 transition-all ${
                             draggingLead === lead.id ? 'opacity-50 scale-95' : ''
                           }`}
                         >
@@ -5669,17 +5964,26 @@ export function AdminDashboard() {
                             {leadScores[lead.id] >= 20 && leadScores[lead.id] < 50 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">WARM</span>}
                           </div>
                           <p className="text-xs text-gray-500 truncate">{lead.email}</p>
+                          {lead.problem && <p className="text-[11px] text-gray-600 mt-1 line-clamp-1">{lead.problem}</p>}
                           <div className="flex items-center gap-2 mt-2">
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-gray-400">{lead.field}</span>
                             {lead.emailsSent > 0 && (
                               <span className="text-[10px] text-gray-600">{lead.emailsSent} sent</span>
                             )}
+                            {lead.lastEmailAt && (
+                              <span className="text-[10px] text-gray-600">{new Date(lead.lastEmailAt).toLocaleDateString()}</span>
+                            )}
+                          </div>
+                          {/* Quick actions on hover */}
+                          <div className="hidden group-hover:flex gap-1 mt-2 pt-2 border-t border-white/5">
+                            <button onClick={(e) => { e.stopPropagation(); setTab('compose'); setIndividualLeadId(lead.id); setSendTarget('individual'); }} className="text-[10px] px-2 py-0.5 rounded bg-orange-500/10 text-orange-400 hover:bg-orange-500/20">Email</button>
+                            <button onClick={(e) => { e.stopPropagation(); setTab('leads'); setSearchQuery(lead.email); }} className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-gray-400 hover:bg-white/10">View Profile</button>
                           </div>
                         </div>
                       ))}
                       {(pipelineData[stage.id] || []).length === 0 && (
-                        <div className="text-center py-8 text-gray-600 text-xs">
-                          Drop leads here
+                        <div className="text-center py-12 text-gray-600 text-xs border-2 border-dashed border-white/5 rounded-xl">
+                          Drag leads here
                         </div>
                       )}
                     </div>

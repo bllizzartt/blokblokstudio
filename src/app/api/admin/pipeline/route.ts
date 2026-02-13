@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 /**
  * Pipeline/Kanban API — manages lead stages for visual pipeline.
  *
- * GET  — returns leads grouped by pipeline stage
+ * GET  — returns leads grouped by pipeline stage (with search, richer fields)
  * PATCH — move a lead to a different stage
  */
 
@@ -24,6 +24,8 @@ export async function GET(req: NextRequest) {
   if (authError) return authError;
 
   try {
+    const search = req.nextUrl.searchParams.get('search')?.trim();
+
     // Ensure pipelineStage column exists
     await prisma.$executeRawUnsafe(
       `ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "pipelineStage" TEXT DEFAULT 'new'`
@@ -33,28 +35,46 @@ export async function GET(req: NextRequest) {
       id: string; name: string; email: string; field: string; status: string;
       pipelineStage: string | null; tags: string | null; createdAt: Date;
       emailsSent: number; bounceCount: number; website: string | null;
+      problem: string | null; lastEmailAt: Date | null;
     }>>(
-      `SELECT "id", "name", "email", "field", "status", "pipelineStage", "tags", "createdAt", "emailsSent", "bounceCount", "website"
+      `SELECT "id", "name", "email", "field", "status", "pipelineStage", "tags",
+              "createdAt", "emailsSent", "bounceCount", "website", "problem", "lastEmailAt"
        FROM "Lead"
        WHERE "unsubscribed" = false
-       ORDER BY "createdAt" DESC`
+       ${search ? `AND (
+         "name" ILIKE '%' || $1 || '%' OR
+         "email" ILIKE '%' || $1 || '%' OR
+         "field" ILIKE '%' || $1 || '%' OR
+         "problem" ILIKE '%' || $1 || '%'
+       )` : ''}
+       ORDER BY "createdAt" DESC`,
+      ...(search ? [search] : [])
     );
 
-    // Group by stage
+    // Group by stage with counts
     const pipeline: Record<string, typeof leads> = {};
+    const stageCounts: Record<string, number> = {};
     for (const stage of PIPELINE_STAGES) {
       pipeline[stage.id] = [];
+      stageCounts[stage.id] = 0;
     }
     for (const lead of leads) {
       const stage = lead.pipelineStage || 'new';
       if (pipeline[stage]) {
         pipeline[stage].push(lead);
+        stageCounts[stage]++;
       } else {
         pipeline['new'].push(lead);
+        stageCounts['new']++;
       }
     }
 
-    return NextResponse.json({ stages: PIPELINE_STAGES, pipeline });
+    return NextResponse.json({
+      stages: PIPELINE_STAGES,
+      pipeline,
+      stageCounts,
+      totalLeads: leads.length,
+    });
   } catch (err) {
     return NextResponse.json({ error: (err instanceof Error ? err.message : String(err)).slice(0, 200) }, { status: 500 });
   }
