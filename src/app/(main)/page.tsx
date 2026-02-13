@@ -1,6 +1,7 @@
 import { getTranslations } from 'next-intl/server';
 import type { Metadata } from 'next';
 import { HomeHero } from '@/components/HomeHero';
+import { DeviceMockup } from '@/components/DeviceMockup';
 import { HomeClients } from '@/components/HomeClients';
 import { HomeServices } from '@/components/HomeServices';
 import { HomeProjects } from '@/components/HomeProjects';
@@ -23,6 +24,7 @@ export default function HomePage() {
   return (
     <div className="page-transition">
       <HomeHero />
+      <DeviceMockup />
       <HomeClients />
       <HomeServices />
       <HomeProjects />

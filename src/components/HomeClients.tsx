@@ -51,12 +51,11 @@ import { AnimatedSection } from './AnimatedSection';
  * ---------------------------------------------------------------------------
  */
 const clients = [
-  { name: 'Acme Corp', logo: null },
-  { name: 'Globex', logo: null },
-  { name: 'Initech', logo: null },
-  { name: 'Umbrella', logo: null },
-  { name: 'Stark Industries', logo: null },
-  { name: 'Wayne Enterprises', logo: null },
+  { name: 'Coach Kofi', logo: null },
+  { name: 'Exotic Ripz', logo: null },
+  { name: 'The New School', logo: null },
+  { name: 'Public Affair', logo: null },
+  { name: 'Nanny & Nest', logo: null },
 ];
 
 export function HomeClients() {
@@ -76,7 +75,7 @@ export function HomeClients() {
 
         {/* Logo grid — 3 cols on mobile, 6 on sm+ */}
         <AnimatedSection delay={0.1}>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-6 sm:gap-8 items-center">
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-6 sm:gap-8 items-center">
             {clients.map((client, i) => (
               /**
                * Individual client logo slot.

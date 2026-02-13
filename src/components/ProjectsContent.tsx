@@ -66,6 +66,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 import { AnimatedSection } from './AnimatedSection';
 import Link from 'next/link';
 
@@ -96,15 +97,11 @@ import Link from 'next/link';
  * ---------------------------------------------------------------------------
  */
 const allProjects = [
-  { id: 1, title: 'Zenith Finance', category: 'web', year: '2025', desc: 'A comprehensive fintech platform redesign with focus on user trust and clarity.', slug: 'zenith-finance' },
-  { id: 2, title: 'Aura Wellness', category: 'brand', year: '2025', desc: 'Complete brand identity for a luxury wellness brand expanding globally.', slug: 'aura-wellness' },
-  { id: 3, title: 'NovaTech App', category: 'app', year: '2024', desc: 'Cross-platform mobile application for next-gen project management.', slug: 'novatech-app' },
-  { id: 4, title: 'Monolith Records', category: 'web', year: '2024', desc: 'Immersive music label website with audio-reactive visuals.', slug: 'monolith-records' },
-  { id: 5, title: 'Apex Athletics', category: 'brand', year: '2024', desc: 'Dynamic sports brand identity system with motion design guidelines.', slug: 'apex-athletics' },
-  { id: 6, title: 'Horizon Travel', category: 'marketing', year: '2024', desc: 'Multi-channel digital marketing campaign driving 300% booking increase.', slug: 'horizon-travel' },
-  { id: 7, title: 'Vortex Gaming', category: 'web', year: '2023', desc: 'High-performance esports team website with live stats integration.', slug: 'vortex-gaming' },
-  { id: 8, title: 'Luna Cosmetics', category: 'app', year: '2023', desc: 'AR-powered beauty app with virtual try-on and personalized routines.', slug: 'luna-cosmetics' },
-  { id: 9, title: 'Echo Media', category: 'marketing', year: '2023', desc: 'Full-scale digital presence overhaul and content strategy execution.', slug: 'echo-media' },
+  { id: 1, title: 'Coach Kofi', category: 'web', year: '2025', desc: 'High-performance personal brand and coaching platform with bold visual identity.', slug: 'coach-kofi', image: '/images/projects/coachkofi.png' },
+  { id: 2, title: 'Nanny & Nest', category: 'web', year: '2025', desc: 'Warm, trust-focused membership platform for a premium childcare and home assistance agency.', slug: 'nanny-and-nest', image: '/images/projects/nannyandnest.png' },
+  { id: 3, title: 'Exotic Ripz', category: 'web', year: '2025', desc: 'Vibrant e-commerce platform for a collectible trading card community brand.', slug: 'exotic-ripz', image: '/images/projects/exoticripz.png' },
+  { id: 4, title: 'The New School', category: 'web', year: '2024', desc: 'Institutional web presence for The New School\'s Center for Military-Affiliated Students.', slug: 'military-newschool', image: '/images/projects/military-newschool.png' },
+  { id: 5, title: 'Public Affair', category: 'brand', year: '2024', desc: 'Sophisticated brand identity and web experience for a premium lifestyle brand.', slug: 'public-affair', image: '/images/projects/public-affair.png' },
 ];
 
 /**
@@ -143,8 +140,6 @@ export function ProjectsContent() {
     { key: 'all', label: t('filter_all') },
     { key: 'web', label: t('filter_web') },
     { key: 'brand', label: t('filter_brand') },
-    { key: 'app', label: t('filter_app') },
-    { key: 'marketing', label: t('filter_marketing') },
   ];
 
   /**
@@ -259,18 +254,21 @@ export function ProjectsContent() {
                         Make sure to add an `image` field to each project
                         in the allProjects array and import Image from next/image.
                   */}
-                  <div className="aspect-[4/3] bg-gradient-to-br from-gray-900 to-gray-800 relative overflow-hidden">
-                    {/* Subtle grid pattern overlay */}
-                    <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:30px_30px]" />
-                    {/* Centered placeholder icon (image/photo icon) */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-16 h-16 rounded-2xl border border-white/10 flex items-center justify-center group-hover:border-white/20 transition-colors">
-                        <svg className="w-6 h-6 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-                    </div>
-                    {/* Dark overlay that fades in on hover */}
+                  <div className="aspect-[4/3] relative overflow-hidden bg-gray-900">
+                    {project.image ? (
+                      <Image
+                        src={project.image}
+                        alt={project.title}
+                        fill
+                        className="object-cover object-top group-hover:scale-105 transition-transform duration-700"
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      />
+                    ) : (
+                      <>
+                        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800" />
+                        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:30px_30px]" />
+                      </>
+                    )}
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-500" />
                   </div>
 

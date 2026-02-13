@@ -68,22 +68,22 @@ import { motion } from 'framer-motion';
  */
 const testimonials = [
   {
-    quote: 'Blok Blok Studio transformed our digital presence completely. Their attention to detail and creative vision exceeded every expectation.',
-    name: 'Sarah Chen',
-    role: 'CEO, Zenith Finance',
-    initials: 'SC',
+    quote: 'Blok Blok Studio transformed my online presence completely. The bold design perfectly captures my coaching philosophy and the results have been incredible.',
+    name: 'Kofi',
+    role: 'Founder, Coach Kofi',
+    initials: 'CK',
   },
   {
-    quote: 'Working with this team was an absolute pleasure. They understood our brand instantly and delivered a website that truly represents who we are.',
-    name: 'Marcus Rivera',
-    role: 'Founder, Aura Wellness',
-    initials: 'MR',
+    quote: 'Working with this team was an absolute pleasure. They understood our brand instantly and delivered a website that builds trust with families from the first click.',
+    name: 'Nanny & Nest Team',
+    role: 'Nanny & Nest',
+    initials: 'NN',
   },
   {
-    quote: 'The results speak for themselves — 300% increase in conversions within three months of launch. Incredible work from start to finish.',
-    name: 'Emily Park',
-    role: 'Marketing Director, Horizon Travel',
-    initials: 'EP',
+    quote: 'The e-commerce store they built for us is incredible. Our booster pack drops sell out in hours and the community engagement through the site has been amazing.',
+    name: 'Exotic Ripz',
+    role: 'Exotic Ripz',
+    initials: 'ER',
   },
 ];
 

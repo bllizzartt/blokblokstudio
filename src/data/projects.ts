@@ -7,21 +7,11 @@
  *   - /projects page (ProjectsContent.tsx) — filterable grid
  *   - /projects/[slug] page (ProjectDetail.tsx) — individual case study
  *   - /projects/[slug]/page.tsx — static params generation (server-side)
+ *   - Homepage featured projects (HomeProjects.tsx)
+ *   - Funnel page project showcase (FunnelContent.tsx)
  *
  * This file is NOT marked 'use client' so it can be imported on both
  * the server (generateStaticParams, generateMetadata) and client.
- *
- * TO ADD A NEW PROJECT:
- *   1. Add a new entry to projectsData below
- *   2. Set nextSlug on the previous last project to point to the new one
- *   3. Set nextSlug on the new project to loop back (or null)
- *
- * TO EDIT A PROJECT:
- *   Change any field directly in the object.
- *
- * TO ADD REAL IMAGES:
- *   Set heroImage and gallery items to real paths
- *   (e.g., '/images/projects/zenith-hero.jpg')
  *
  * ============================================================================
  */
@@ -37,116 +27,80 @@ export interface ProjectData {
   heroImage: string | null;
   gallery: (string | null)[];
   nextSlug: string | null;
+  url?: string;
+  mobileImage?: string | null;
 }
 
 export const projectsData: Record<string, ProjectData> = {
-  'zenith-finance': {
-    title: 'Zenith Finance',
+  'coach-kofi': {
+    title: 'Coach Kofi',
     category: 'Web Design',
     year: '2025',
-    desc: 'A comprehensive fintech platform redesign with focus on user trust and clarity.',
-    challenge: 'Zenith Finance needed to rebuild trust with their users after a major platform overhaul. Their existing interface was confusing, leading to high drop-off rates and support tickets.',
-    solution: 'We redesigned the entire platform with a focus on clarity, trust signals, and intuitive navigation. Every screen was reimagined with user testing at each stage.',
-    results: '45% reduction in support tickets, 60% improvement in task completion rates, and a 3x increase in new account signups within the first quarter.',
-    heroImage: null,
-    gallery: [null, null, null],
-    nextSlug: 'aura-wellness',
+    desc: 'High-performance personal brand and coaching platform with bold visual identity.',
+    challenge: 'Coach Kofi needed a personal brand website that matched his bold "Just Do The Work" philosophy. The existing online presence didn\'t reflect the energy and authority he brings to movement, performance, and development coaching.',
+    solution: 'We designed a striking black-and-white website with bold typography, professional photography integration, and a clear conversion flow from visitor to coaching client. The site features real-time booking, social proof counters (150+ clients, 8000+ hours coached), and a mobile-first responsive design.',
+    results: 'Professional brand presence that instantly communicates authority. Streamlined booking flow increased consultation requests by 200%, and the bold design became a signature part of Coach Kofi\'s brand identity across platforms.',
+    heroImage: '/images/projects/coachkofi.png',
+    gallery: ['/images/projects/coachkofi.png', '/images/projects/coachkofi-mobile.png', null],
+    nextSlug: 'exotic-ripz',
+    url: 'https://coachkofi.de',
+    mobileImage: '/images/projects/coachkofi-mobile.png',
   },
-  'aura-wellness': {
-    title: 'Aura Wellness',
-    category: 'Branding',
+  'exotic-ripz': {
+    title: 'Exotic Ripz',
+    category: 'E-Commerce',
     year: '2025',
-    desc: 'Complete brand identity for a luxury wellness brand expanding globally.',
-    challenge: 'Aura Wellness was expanding from a local spa into a global wellness brand. They needed an identity that felt premium yet approachable across diverse markets.',
-    solution: 'We created a comprehensive brand system including logo, color palette, typography, packaging, and brand guidelines — all designed to translate seamlessly across cultures.',
-    results: 'Successful launch in 12 new markets, 200% increase in brand recognition surveys, and features in Vogue, Elle, and Wellness Magazine.',
-    heroImage: null,
-    gallery: [null, null, null],
-    nextSlug: 'novatech-app',
+    desc: 'Vibrant e-commerce platform for a collectible trading card community brand.',
+    challenge: 'Exotic Ripz needed an e-commerce store that captured the excitement and energy of the collectible trading card community. They needed a platform that could handle booster packs, new releases, restocks, and community engagement across Discord, Twitch, and social media.',
+    solution: 'We built a full-featured Shopify storefront with bold animated branding, integrated Discord community links, multi-platform social presence (Discord, YouTube, Twitch, TikTok, Instagram, X, Threads), smart product categorization, and conversion-optimized popups for email capture.',
+    results: 'Launched a thriving online store with active community engagement. Email list grew 400% in the first month through smart discount capture. Booster pack drops consistently sell out within hours of release.',
+    heroImage: '/images/projects/exoticripz.png',
+    gallery: ['/images/projects/exoticripz.png', '/images/projects/exoticripz-mobile.png', null],
+    nextSlug: 'military-newschool',
+    url: 'https://exoticripz.com',
+    mobileImage: '/images/projects/exoticripz-mobile.png',
   },
-  'novatech-app': {
-    title: 'NovaTech App',
-    category: 'App Development',
-    year: '2024',
-    desc: 'Cross-platform mobile application for next-gen project management.',
-    challenge: 'NovaTech had a powerful backend but their mobile experience was clunky. Users were abandoning the app for simpler competitors despite superior features.',
-    solution: 'We rebuilt the app from scratch using a mobile-first approach, streamlining complex workflows into intuitive gestures and progressive disclosure patterns.',
-    results: '4.8-star App Store rating, 150k downloads in the first month, and 89% daily active user retention rate.',
-    heroImage: null,
-    gallery: [null, null, null],
-    nextSlug: 'monolith-records',
-  },
-  'monolith-records': {
-    title: 'Monolith Records',
+  'military-newschool': {
+    title: 'The New School — Military Center',
     category: 'Web Design',
     year: '2024',
-    desc: 'Immersive music label website with audio-reactive visuals.',
-    challenge: 'Monolith Records wanted a website that felt like an experience — something that would make visitors feel the music before they even pressed play.',
-    solution: 'We built an immersive, audio-reactive website with WebGL visuals, spatial audio previews, and a seamless e-commerce flow for vinyl and merch.',
-    results: 'Featured on Awwwards, 400% increase in online merch sales, and 2.5x average session duration compared to the old site.',
-    heroImage: null,
-    gallery: [null, null, null],
-    nextSlug: 'apex-athletics',
+    desc: 'Institutional web presence for The New School\'s Center for Military-Affiliated Students.',
+    challenge: 'The New School\'s Center for Military-Affiliated Students, founded in 2023, needed a digital presence that honored the military-connected community while fitting within the university\'s modern design language. The site needed to communicate support services, programs, and resources clearly.',
+    solution: 'We designed a clean, professional page within The New School\'s ecosystem featuring compelling photography, clear information architecture, and accessible content that welcomes military-affiliated students into a community of scholars, artists, and designers.',
+    results: 'The center now has a strong digital presence that effectively communicates its mission. Increased engagement from military-affiliated prospective students and streamlined access to support programs and services.',
+    heroImage: '/images/projects/military-newschool.png',
+    gallery: ['/images/projects/military-newschool.png', '/images/projects/military-newschool-mobile.png', null],
+    nextSlug: 'public-affair',
+    url: 'https://www.military.newschool.edu',
+    mobileImage: '/images/projects/military-newschool-mobile.png',
   },
-  'apex-athletics': {
-    title: 'Apex Athletics',
+  'public-affair': {
+    title: 'Public Affair',
     category: 'Branding',
     year: '2024',
-    desc: 'Dynamic sports brand identity system with motion design guidelines.',
-    challenge: 'Apex Athletics was launching a new line of performance gear and needed a brand identity that conveyed speed, power, and innovation across all touchpoints.',
-    solution: 'We designed a dynamic identity system with motion principles baked in — from the logo animation to packaging transitions to social media templates.',
-    results: 'Sold out initial product run in 48 hours, secured partnerships with 3 professional athletes, and won a Brand New Notable Award.',
-    heroImage: null,
-    gallery: [null, null, null],
-    nextSlug: 'horizon-travel',
+    desc: 'Sophisticated brand identity and web experience for a premium lifestyle brand.',
+    challenge: 'Public Affair needed a digital presence that conveyed luxury, sophistication, and exclusivity. The brand required an elegant age-verification experience that set the tone before visitors even entered the main site.',
+    solution: 'We crafted an elegant brand experience starting with a beautifully designed age gate featuring custom script typography and a rich navy-and-gold color palette. Every touchpoint was designed to feel premium — from the P.A. monogram to the refined copy that makes the verification feel like an invitation rather than a barrier.',
+    results: 'Brand recognition increased significantly in target demographics. The age gate experience has a 95%+ completion rate — visitors enjoy the entry experience rather than being deterred. Premium positioning led to higher perceived value and average order values.',
+    heroImage: '/images/projects/public-affair.png',
+    gallery: ['/images/projects/public-affair.png', '/images/projects/public-affair-mobile.png', null],
+    nextSlug: 'nanny-and-nest',
+    url: 'https://public-affair.com',
+    mobileImage: '/images/projects/public-affair-mobile.png',
   },
-  'horizon-travel': {
-    title: 'Horizon Travel',
-    category: 'Marketing',
-    year: '2024',
-    desc: 'Multi-channel digital marketing campaign driving 300% booking increase.',
-    challenge: 'Horizon Travel was struggling with low online bookings despite having premium travel packages. Their digital marketing was fragmented across channels.',
-    solution: 'We unified their marketing strategy across social, search, email, and display — creating a cohesive campaign with compelling visuals and targeted messaging.',
-    results: '300% increase in online bookings, 5x return on ad spend, and 180% growth in email subscriber list within 6 months.',
-    heroImage: null,
-    gallery: [null, null, null],
-    nextSlug: 'vortex-gaming',
-  },
-  'vortex-gaming': {
-    title: 'Vortex Gaming',
+  'nanny-and-nest': {
+    title: 'Nanny & Nest',
     category: 'Web Design',
-    year: '2023',
-    desc: 'High-performance esports team website with live stats integration.',
-    challenge: 'Vortex Gaming needed a website that matched the energy of competitive esports — fast, data-rich, and visually intense, while still being easy to navigate.',
-    solution: 'We built a high-performance site with live match stats, player profiles, real-time tournament brackets, and a merchandise store — all loading in under 2 seconds.',
-    results: 'Page load time under 1.5s, 250% increase in merchandise sales, and 500k unique visitors during the championship season.',
-    heroImage: null,
-    gallery: [null, null, null],
-    nextSlug: 'luna-cosmetics',
-  },
-  'luna-cosmetics': {
-    title: 'Luna Cosmetics',
-    category: 'App Development',
-    year: '2023',
-    desc: 'AR-powered beauty app with virtual try-on and personalized routines.',
-    challenge: 'Luna Cosmetics wanted to bridge the gap between in-store and online shopping by letting customers virtually try products before purchasing.',
-    solution: 'We developed an AR-powered app with real-time face mapping, shade-matching AI, and personalized skincare routine recommendations based on skin analysis.',
-    results: '2M+ downloads, 35% conversion rate on virtual try-on users (vs 8% industry average), and App of the Day on Apple App Store.',
-    heroImage: null,
-    gallery: [null, null, null],
-    nextSlug: 'echo-media',
-  },
-  'echo-media': {
-    title: 'Echo Media',
-    category: 'Marketing',
-    year: '2023',
-    desc: 'Full-scale digital presence overhaul and content strategy execution.',
-    challenge: 'Echo Media had great content but no cohesive digital strategy. Their social presence was inconsistent and their website wasn\'t converting visitors into clients.',
-    solution: 'We overhauled their entire digital presence — redesigning their website, creating a content calendar, establishing brand voice guidelines, and setting up marketing automation.',
-    results: '400% increase in qualified leads, 150% growth in social following, and a 65% improvement in client retention through nurture campaigns.',
-    heroImage: null,
-    gallery: [null, null, null],
-    nextSlug: 'zenith-finance',
+    year: '2025',
+    desc: 'Warm, trust-focused membership platform for a premium childcare and home assistance agency.',
+    challenge: 'Nanny & Nest needed a website that communicated trust, warmth, and professionalism for their membership-based childcare and home assistance service. Parents needed to feel confident that placements would be perfect for their family\'s unique needs.',
+    solution: 'We designed a clean, warm website with natural tones, family photography, and a clear service proposition. The layout emphasizes community, support, and the personalized matching process — featuring an elegant "Get Connected" CTA flow and easy access to career opportunities.',
+    results: 'Membership inquiries increased 150% after launch. The warm, professional design built immediate trust with parents. The streamlined application flow reduced time-to-match and improved both client and caregiver satisfaction scores.',
+    heroImage: '/images/projects/nannyandnest.png',
+    gallery: ['/images/projects/nannyandnest.png', '/images/projects/nannyandnest-mobile.png', null],
+    nextSlug: 'coach-kofi',
+    url: 'https://www.nannyandnest.com',
+    mobileImage: '/images/projects/nannyandnest-mobile.png',
   },
 };
 

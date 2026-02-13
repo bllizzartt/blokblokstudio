@@ -401,12 +401,11 @@ const serviceModules = [
 ];
 
 const projectShowcase = [
-  { label: 'E-Commerce Redesign', stat: '+240%', metric: 'Conversions', color: 'from-orange-500/20 via-red-500/10 to-transparent' },
-  { label: 'SaaS Landing Page', stat: '+180%', metric: 'Sign-ups', color: 'from-blue-500/20 via-cyan-500/10 to-transparent' },
-  { label: 'Brand Identity System', stat: '10x', metric: 'Brand Recognition', color: 'from-purple-500/20 via-violet-500/10 to-transparent' },
-  { label: 'Mobile App', stat: '50K+', metric: 'Downloads', color: 'from-green-500/20 via-emerald-500/10 to-transparent' },
-  { label: 'Restaurant Website', stat: '+300%', metric: 'Online Orders', color: 'from-amber-500/20 via-yellow-500/10 to-transparent' },
-  { label: 'Portfolio Site', stat: '3x', metric: 'Client Inquiries', color: 'from-pink-500/20 via-rose-500/10 to-transparent' },
+  { label: 'Coach Kofi', stat: '+200%', metric: 'Consultations', image: '/images/projects/coachkofi.png', url: 'coachkofi.de' },
+  { label: 'Exotic Ripz', stat: '+400%', metric: 'Email Growth', image: '/images/projects/exoticripz.png', url: 'exoticripz.com' },
+  { label: 'The New School', stat: '10x', metric: 'Engagement', image: '/images/projects/military-newschool.png', url: 'military.newschool.edu' },
+  { label: 'Public Affair', stat: '95%+', metric: 'Completion Rate', image: '/images/projects/public-affair.png', url: 'public-affair.com' },
+  { label: 'Nanny & Nest', stat: '+150%', metric: 'Inquiries', image: '/images/projects/nannyandnest.png', url: 'nannyandnest.com' },
 ];
 
 const included = [
@@ -1341,29 +1340,24 @@ export function FunnelContent() {
                 variants={scaleUp}
                 className="group relative aspect-[4/3] rounded-2xl sm:rounded-3xl overflow-hidden cursor-pointer"
               >
-                {/* Visual gradient background — replace with real screenshots */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${project.color}`} />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-
-                {/* Grid pattern */}
-                <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
-
-                {/* Image icon placeholder */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <svg className="w-7 h-7 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                </div>
+                {/* Real project screenshot */}
+                <Image
+                  src={project.image}
+                  alt={project.label}
+                  fill
+                  className="object-cover object-top group-hover:scale-105 transition-transform duration-700"
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
                 {/* Stats overlay at bottom */}
                 <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-6">
                   <p className="text-xs text-gray-400 mb-1">{project.label}</p>
-                  <div className="flex items-baseline gap-1">
+                  <div className="flex items-baseline gap-2">
                     <span className="text-2xl sm:text-3xl font-bold text-white">{project.stat}</span>
                     <span className="text-sm text-gray-400">{project.metric}</span>
                   </div>
+                  <p className="text-xs text-gray-500 mt-1">{project.url}</p>
                 </div>
               </motion.div>
             ))}

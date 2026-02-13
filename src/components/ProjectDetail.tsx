@@ -33,6 +33,7 @@
 import { AnimatedSection } from './AnimatedSection';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import Image from 'next/image';
 import { projectsData } from '@/data/projects';
 
 /**
@@ -89,9 +90,22 @@ export function ProjectDetail({ slug }: { slug: string }) {
               {project.title}
             </h1>
 
-            <p className="text-gray-400 text-base sm:text-lg md:text-xl max-w-3xl">
+            <p className="text-gray-400 text-base sm:text-lg md:text-xl max-w-3xl mb-6">
               {project.desc}
             </p>
+            {project.url && (
+              <a
+                href={project.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-white text-black font-medium hover:bg-gray-100 transition-colors text-sm"
+              >
+                Visit Live Site
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            )}
           </AnimatedSection>
         </div>
       </section>
@@ -102,15 +116,22 @@ export function ProjectDetail({ slug }: { slug: string }) {
       <section className="px-5 sm:px-6 lg:px-8 mb-16 sm:mb-24">
         <div className="max-w-7xl mx-auto">
           <AnimatedSection delay={0.2}>
-            <div className="aspect-[16/9] rounded-2xl sm:rounded-3xl bg-gradient-to-br from-gray-900 to-gray-800 relative overflow-hidden">
-              <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:40px_40px]" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-20 h-20 rounded-2xl border border-white/10 flex items-center justify-center">
-                  <svg className="w-8 h-8 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-              </div>
+            <div className="aspect-[16/9] rounded-2xl sm:rounded-3xl relative overflow-hidden bg-gray-900">
+              {project.heroImage ? (
+                <Image
+                  src={project.heroImage}
+                  alt={project.title}
+                  fill
+                  className="object-cover object-top"
+                  sizes="(max-width: 768px) 100vw, 1280px"
+                  priority
+                />
+              ) : (
+                <>
+                  <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800" />
+                  <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:40px_40px]" />
+                </>
+              )}
             </div>
           </AnimatedSection>
         </div>
@@ -154,17 +175,16 @@ export function ProjectDetail({ slug }: { slug: string }) {
             <h2 className="text-2xl sm:text-3xl font-bold">Project Gallery</h2>
           </AnimatedSection>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {project.gallery.map((_, i) => (
+            {project.gallery.filter(img => img !== null).map((img, i) => (
               <AnimatedSection key={i} delay={i * 0.1}>
-                <div className="aspect-[4/3] rounded-2xl sm:rounded-3xl bg-gradient-to-br from-gray-900 to-gray-800 relative overflow-hidden">
-                  <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:30px_30px]" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-14 h-14 rounded-2xl border border-white/10 flex items-center justify-center">
-                      <svg className="w-6 h-6 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                    </div>
-                  </div>
+                <div className="aspect-[4/3] rounded-2xl sm:rounded-3xl relative overflow-hidden bg-gray-900">
+                  <Image
+                    src={img}
+                    alt={`${project.title} gallery ${i + 1}`}
+                    fill
+                    className="object-cover object-top"
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  />
                 </div>
               </AnimatedSection>
             ))}
