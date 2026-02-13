@@ -478,6 +478,7 @@ function AuditForm() {
     website: '',
     noWebsite: false,
     problem: '',
+    consent: false,
   });
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -621,6 +622,37 @@ function AuditForm() {
         />
       </div>
 
+      {/* GDPR Consent Checkbox */}
+      <label className="flex items-start gap-3 cursor-pointer group">
+        <div className={`w-5 h-5 mt-0.5 rounded-md border flex items-center justify-center flex-shrink-0 transition-colors ${
+          formData.consent
+            ? 'bg-orange-500/20 border-orange-500/40'
+            : 'bg-white/[0.04] border-white/10 group-hover:border-white/20'
+        }`}>
+          {formData.consent && (
+            <svg className="w-3 h-3 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+        </div>
+        <input
+          type="checkbox"
+          className="sr-only"
+          checked={formData.consent}
+          onChange={(e) => setFormData({ ...formData, consent: e.target.checked })}
+        />
+        <span className="text-xs sm:text-sm text-gray-400 leading-relaxed">
+          I agree to the{' '}
+          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300 underline underline-offset-2">
+            Privacy Policy
+          </a>{' '}
+          and{' '}
+          <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300 underline underline-offset-2">
+            Terms of Service
+          </a>
+        </span>
+      </label>
+
       {error && (
         <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
           <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -659,7 +691,7 @@ function AuditForm() {
         <svg className="w-3.5 h-3.5 text-green-500/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
         </svg>
-        We never share your info. Unsubscribe anytime.
+        Your data is protected. Unsubscribe anytime with one click.
       </p>
     </form>
   );

@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   const leads = await prisma.lead.findMany({
     where,
-    select: { id: true, email: true, name: true, field: true, website: true, problem: true },
+    select: { id: true, email: true, name: true, field: true, website: true, problem: true, unsubscribeToken: true },
   });
 
   if (leads.length === 0) {
@@ -108,6 +108,7 @@ interface LeadData {
   field: string;
   website: string | null;
   problem: string;
+  unsubscribeToken?: string;
 }
 
 function personalizeText(text: string, lead: LeadData): string {
@@ -124,7 +125,10 @@ export function buildEmailHtml(bodyTemplate: string, lead: LeadData & { id?: str
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || (process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : 'http://localhost:3000');
-  const unsubscribeUrl = lead.id ? `${baseUrl}/api/unsubscribe?id=${lead.id}` : '#';
+  // Prefer token-based unsubscribe (GDPR compliant) over id-based
+  const unsubscribeUrl = lead.unsubscribeToken
+    ? `${baseUrl}/unsubscribe?token=${lead.unsubscribeToken}`
+    : lead.id ? `${baseUrl}/api/unsubscribe?id=${lead.id}` : '#';
 
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto;">

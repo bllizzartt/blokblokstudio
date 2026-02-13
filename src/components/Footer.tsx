@@ -82,6 +82,18 @@ export function Footer() {
   ];
 
   /* --------------------------------------------------------------------------
+   * Legal Links Array
+   * --------------------------------------------------------------------------
+   * GDPR-required legal pages. Labels come from the "nav" namespace.
+   * -------------------------------------------------------------------------- */
+  const legalLinks = [
+    { href: '/privacy', label: nav('privacy') },
+    { href: '/terms', label: nav('terms') },
+    { href: '/cookies', label: nav('cookies') },
+    { href: '/data-rights', label: nav('data_rights') },
+  ];
+
+  /* --------------------------------------------------------------------------
    * Social Media Links Array
    * --------------------------------------------------------------------------
    * Each entry has a display `label` and an `href`.
@@ -111,7 +123,7 @@ export function Footer() {
          * Layout: 2 columns on mobile, 4 columns on large (lg) screens.
          * Columns: Brand | Quick Links | Socials | Newsletter
          * ============================================================== */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-8">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-6">
 
           {/* ==============================================================
            * COLUMN 1: BRAND / LOGO
@@ -192,7 +204,30 @@ export function Footer() {
           </div>
 
           {/* ==============================================================
-           * COLUMN 4: NEWSLETTER SIGNUP
+           * COLUMN 4: LEGAL LINKS
+           * ==============================================================
+           * GDPR-required legal pages (Privacy, Terms, Cookies, Data Rights).
+           * ============================================================== */}
+          <div>
+            <h4 className="text-sm font-medium mb-6 text-gray-300">
+              {t('legal')}
+            </h4>
+            <ul className="space-y-3">
+              {legalLinks.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="text-sm text-gray-500 hover:text-white transition-colors duration-300"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* ==============================================================
+           * COLUMN 5: NEWSLETTER SIGNUP
            * ==============================================================
            * Spans 2 columns on mobile, 1 on large screens.
            * Contains an email input and a submit button.

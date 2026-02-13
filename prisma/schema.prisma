@@ -35,6 +35,12 @@ model Lead {
   lastBounceAt DateTime?
   bounceType   String?  // hard, soft
 
+  // GDPR Compliance Fields
+  consentGiven     Boolean   @default(false)
+  consentTimestamp  DateTime?
+  consentIp        String?
+  unsubscribeToken String    @unique @default(cuid())
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

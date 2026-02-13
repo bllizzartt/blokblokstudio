@@ -1,6 +1,8 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 /**
  * Strip HTML tags for plain-text email version (deliverability boost).
@@ -44,7 +46,7 @@ export async function notifyNewLead(lead: {
   }
 
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: `Blok Blok Funnel <${from}>`,
       to,
       subject: `New Lead: ${lead.name} (${lead.field})`,
@@ -113,7 +115,7 @@ export async function sendCampaignEmail({
   const text = htmlToText(html) + `\n\n---\nBlok Blok Studio — Digital Agency for Ambitious Brands\nUnsubscribe: ${unsubscribeUrl}`;
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await getResend().emails.send({
       from: `Blok Blok Studio <${from}>`,
       to,
       replyTo,

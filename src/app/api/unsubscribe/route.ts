@@ -1,3 +1,19 @@
+/* ==========================================================================
+ * /api/unsubscribe — Email Unsubscribe (GDPR Token-Based + Legacy ID-Based)
+ * ==========================================================================
+ *
+ * PURPOSE:
+ *   Processes unsubscribe requests using either:
+ *   - A unique per-lead token (GDPR compliant, preferred)
+ *   - A lead ID (legacy fallback, also supports one-click List-Unsubscribe-Post)
+ *
+ * METHODS:
+ *   POST { token: string }  — GDPR token-based unsubscribe
+ *   POST ?id=xxx            — One-click unsubscribe via List-Unsubscribe-Post header
+ *   GET  ?id=xxx            — Branded unsubscribe page with options
+ *
+ * ========================================================================== */
+
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
@@ -90,26 +106,74 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * POST /api/unsubscribe — one-click unsubscribe via List-Unsubscribe-Post header.
+ * POST /api/unsubscribe — handles both:
+ * 1. GDPR token-based unsubscribe (body: { token: string })
+ * 2. One-click unsubscribe via List-Unsubscribe-Post header (?id=xxx)
  */
 export async function POST(req: NextRequest) {
+  // Check for legacy id-based one-click unsubscribe (List-Unsubscribe-Post header)
   const id = req.nextUrl.searchParams.get('id');
-
-  if (!id) {
-    return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+  if (id) {
+    try {
+      await prisma.lead.update({
+        where: { id },
+        data: { unsubscribed: true, status: 'unsubscribed' },
+      });
+      await prisma.emailEvent.create({
+        data: { leadId: id, type: 'unsubscribed', details: 'One-click unsubscribe header' },
+      });
+      return NextResponse.json({ success: true });
+    } catch {
+      return NextResponse.json({ success: true }); // Don't leak info
+    }
   }
 
+  // GDPR token-based unsubscribe
   try {
+    const { token } = await req.json();
+
+    if (!token) {
+      return NextResponse.json({ error: 'Token required' }, { status: 400 });
+    }
+
+    // Find lead by their unique unsubscribe token
+    const lead = await prisma.lead.findUnique({
+      where: { unsubscribeToken: token },
+    });
+
+    if (!lead) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 404 });
+    }
+
+    // Already unsubscribed? Still return success (idempotent)
+    if (lead.unsubscribed) {
+      return NextResponse.json({
+        success: true,
+        email: lead.email,
+        alreadyUnsubscribed: true,
+      });
+    }
+
+    // Mark as unsubscribed
     await prisma.lead.update({
-      where: { id },
+      where: { id: lead.id },
       data: { unsubscribed: true, status: 'unsubscribed' },
     });
-    await prisma.emailEvent.create({
-      data: { leadId: id, type: 'unsubscribed', details: 'One-click unsubscribe header' },
+
+    // Log event
+    try {
+      await prisma.emailEvent.create({
+        data: { leadId: lead.id, type: 'unsubscribed', details: 'GDPR token-based unsubscribe' },
+      });
+    } catch { /* ignore */ }
+
+    return NextResponse.json({
+      success: true,
+      email: lead.email,
     });
-    return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json({ success: true }); // Don't leak info
+  } catch (err) {
+    console.error('[API /unsubscribe] Error:', err);
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
 

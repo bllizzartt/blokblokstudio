@@ -30,6 +30,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import './globals.css';
 import { OrganizationSchema, WebsiteSchema } from './structured-data';
+import { CookieConsent } from '@/components/CookieConsent';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://blokblokstudio.com'),
@@ -123,6 +124,7 @@ export default async function RootLayout({
         <WebsiteSchema />
         <NextIntlClientProvider messages={messages}>
           {children}
+          <CookieConsent />
         </NextIntlClientProvider>
       </body>
     </html>

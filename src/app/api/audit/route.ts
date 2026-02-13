@@ -6,12 +6,20 @@ import { notifyTelegram } from '@/lib/telegram';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, email, field, website, noWebsite, problem } = body;
+    const { name, email, field, website, noWebsite, problem, consent } = body;
 
     // Basic validation
     if (!name || !email || !field || !problem) {
       return NextResponse.json(
         { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    // GDPR: Consent is required
+    if (!consent) {
+      return NextResponse.json(
+        { error: 'Consent is required' },
         { status: 400 }
       );
     }
@@ -24,6 +32,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Get IP address for GDPR consent tracking
+    const consentIp =
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      req.headers.get('x-real-ip') ||
+      'unknown';
+
     // Upsert — if same email submits again, update their info
     const lead = await prisma.lead.upsert({
       where: { email },
@@ -33,6 +47,9 @@ export async function POST(req: NextRequest) {
         website: noWebsite ? null : (website || null),
         noWebsite: !!noWebsite,
         problem,
+        consentGiven: true,
+        consentTimestamp: new Date(),
+        consentIp,
       },
       create: {
         name,
@@ -42,6 +59,9 @@ export async function POST(req: NextRequest) {
         noWebsite: !!noWebsite,
         problem,
         source: 'funnel',
+        consentGiven: true,
+        consentTimestamp: new Date(),
+        consentIp,
       },
     });
 
