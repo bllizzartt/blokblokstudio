@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { decrypt } from '@/lib/crypto';
-import net from 'net';
+import { analyzeSentiment } from '@/lib/sentiment';
+import { notifyReply } from '@/lib/telegram';
 import tls from 'tls';
 
 /**
@@ -270,6 +271,9 @@ export async function GET(req: NextRequest) {
 
           totalNew++;
 
+          // Analyze sentiment for all non-auto-reply messages
+          const sentiment = analyzeSentiment(msg.subject, msg.bodyPreview);
+
           if (autoReply) {
             totalAutoReplies++;
           } else if (lead) {
@@ -291,16 +295,34 @@ export async function GET(req: NextRequest) {
               });
             } catch { /* ignore */ }
 
-            // Log reply event
+            // Log reply event with sentiment
             try {
               await prisma.emailEvent.create({
                 data: {
                   leadId: lead.id,
                   accountId: account.id,
                   type: 'replied',
-                  details: `Subject: ${msg.subject.slice(0, 100)}`,
+                  details: JSON.stringify({
+                    subject: msg.subject.slice(0, 100),
+                    sentiment: sentiment.sentiment,
+                    confidence: sentiment.confidence,
+                    reasons: sentiment.reasons,
+                  }),
                 },
               });
+            } catch { /* ignore */ }
+
+            // Send Telegram notification for replies
+            try {
+              await notifyReply(
+                { name: lead.name, email: lead.email },
+                {
+                  subject: msg.subject,
+                  sentiment: sentiment.sentiment,
+                  preview: msg.bodyPreview,
+                  accountEmail: account.email,
+                }
+              );
             } catch { /* ignore */ }
           }
         }

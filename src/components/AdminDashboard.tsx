@@ -362,6 +362,25 @@ export function AdminDashboard() {
   // Warmup data
   const [warmupData, setWarmupData] = useState<{ id: string; email: string; label: string; warmupEnabled: boolean; warmupDaily: number; warmupPhase: number; dailyLimit: number; daysSinceStart: number; sendWindowStart: number; sendWindowEnd: number; sendWeekdays: string; stats: { totalWarmupSent: number; totalInbox: number; totalSpam: number; inboxRate: number; recentInboxRate: number; totalSent: number; totalBounced: number; bounceRate: number }; warmupLogs: { date: string; sent: number; received: number; inbox: number; spam: number }[] }[]>([]);
 
+  // Lead scoring
+  const [leadScores, setLeadScores] = useState<Record<string, number>>({});
+
+  // Connection testing
+  const [testingConnection, setTestingConnection] = useState<string | null>(null);
+  const [connectionResults, setConnectionResults] = useState<Record<string, { smtp: { success: boolean; latency: number; error?: string }; imap: { success: boolean; latency: number; error?: string } }>>({});
+
+  // Spam score
+  const [spamScore, setSpamScore] = useState<{ score: number; rating: string; issues: { trigger: string; category: string; weight: number }[] } | null>(null);
+  const [checkingSpam, setCheckingSpam] = useState(false);
+
+  // Blacklist
+  const [blacklistResult, setBlacklistResult] = useState<{ domain: string; ip: string; clean: boolean; listedOn: { blacklist: string }[]; totalChecked: number } | null>(null);
+  const [checkingBlacklist, setCheckingBlacklist] = useState(false);
+
+  // Engagement timeline
+  const [timelineLeadId, setTimelineLeadId] = useState<string | null>(null);
+  const [timelineEvents, setTimelineEvents] = useState<EmailEvent[]>([]);
+
   const EMAIL_PROVIDERS: Record<string, { label: string; smtpHost: string; smtpPort: number; instructions: string[] }> = {
     'google': {
       label: 'Google Workspace / Gmail',
@@ -638,6 +657,64 @@ export function AdminDashboard() {
     } catch { /* silently fail */ }
   }, [headers]);
 
+  const fetchLeadScores = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/lead-scores', { headers: headers() });
+      if (res.ok) { const data = await res.json(); setLeadScores(data.scores || {}); }
+    } catch { /* silently fail */ }
+  }, [headers]);
+
+  const testConnection = async (accountId: string) => {
+    setTestingConnection(accountId);
+    try {
+      const res = await fetch('/api/admin/test-connection', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ accountId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setConnectionResults(prev => ({ ...prev, [accountId]: data }));
+        showToast(data.smtp?.success ? 'success' : 'error', data.smtp?.success ? 'SMTP connected!' : `SMTP failed: ${data.smtp?.error?.slice(0, 80)}`);
+      }
+    } catch { showToast('error', 'Connection test failed'); }
+    setTestingConnection(null);
+  };
+
+  const checkSpamScore = async (subj: string, bd: string) => {
+    setCheckingSpam(true);
+    try {
+      const res = await fetch('/api/admin/spam-score', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ subject: subj, body: bd }),
+      });
+      if (res.ok) { const data = await res.json(); setSpamScore(data); }
+    } catch { showToast('error', 'Spam check failed'); }
+    setCheckingSpam(false);
+  };
+
+  const checkBlacklist = async (domain: string) => {
+    setCheckingBlacklist(true);
+    try {
+      const res = await fetch('/api/admin/blacklist', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ domain }),
+      });
+      if (res.ok) { const data = await res.json(); setBlacklistResult(data); }
+    } catch { showToast('error', 'Blacklist check failed'); }
+    setCheckingBlacklist(false);
+  };
+
+  const fetchTimeline = async (leadId: string) => {
+    setTimelineLeadId(leadId);
+    try {
+      const res = await fetch(`/api/admin/events?leadId=${leadId}`, { headers: headers() });
+      if (res.ok) { const data = await res.json(); setTimelineEvents(data.events || []); }
+    } catch { /* silently fail */ }
+  };
+
   const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const pw = password;
@@ -665,6 +742,7 @@ export function AdminDashboard() {
         fetchDomains();
         fetchInbox();
         fetchWarmupData();
+        fetchLeadScores();
       } else {
         const data = await res.json().catch(() => ({}));
         localStorage.removeItem('bb_admin_pw');
@@ -1658,6 +1736,17 @@ export function AdminDashboard() {
                               (lead.status || 'new') === 'not_interested' ? 'bg-yellow-500/10 text-yellow-400' :
                               'bg-red-500/10 text-red-400'
                             }`}>{(lead.status || 'new').replace('_', ' ')}</span>
+                            {/* Lead Score */}
+                            {leadScores[lead.id] !== undefined && (
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                                leadScores[lead.id] >= 50 ? 'bg-green-500/10 text-green-400' :
+                                leadScores[lead.id] >= 20 ? 'bg-blue-500/10 text-blue-400' :
+                                leadScores[lead.id] > 0 ? 'bg-gray-500/10 text-gray-400' :
+                                'bg-gray-500/10 text-gray-500'
+                              }`}>
+                                {leadScores[lead.id] >= 50 ? 'HOT' : leadScores[lead.id] >= 20 ? 'WARM' : ''} {leadScores[lead.id]}pts
+                              </span>
+                            )}
                             {lead.emailVerified && (
                               <span className={`text-[10px] px-2 py-0.5 rounded-full ${
                                 lead.verifyResult === 'valid' ? 'bg-green-500/10 text-green-400' :
@@ -1938,6 +2027,43 @@ export function AdminDashboard() {
                                 <option value="booked">Booked</option>
                                 <option value="not_interested">Not Interested</option>
                               </select>
+                            </div>
+
+                            {/* Engagement Timeline */}
+                            <div className="sm:col-span-2">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs text-gray-500 uppercase tracking-wider">Engagement Timeline</p>
+                                <button
+                                  onClick={() => fetchTimeline(lead.id)}
+                                  className="text-[11px] px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/5 text-gray-400 hover:text-white"
+                                >
+                                  {timelineLeadId === lead.id && timelineEvents.length > 0 ? 'Refresh' : 'Load Timeline'}
+                                </button>
+                              </div>
+                              {timelineLeadId === lead.id && timelineEvents.length > 0 && (
+                                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                                  {timelineEvents.map(ev => (
+                                    <div key={ev.id} className="flex items-start gap-3 text-xs">
+                                      <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                                        ev.type === 'sent' ? 'bg-blue-500' :
+                                        ev.type === 'opened' ? 'bg-green-500' :
+                                        ev.type === 'clicked' ? 'bg-purple-500' :
+                                        ev.type === 'replied' ? 'bg-orange-500' :
+                                        ev.type === 'bounced' ? 'bg-red-500' :
+                                        'bg-gray-500'
+                                      }`} />
+                                      <div className="flex-1">
+                                        <span className="text-gray-300 font-medium capitalize">{ev.type}</span>
+                                        {ev.details && <span className="text-gray-500 ml-2">{ev.details.slice(0, 80)}</span>}
+                                        <p className="text-gray-600 text-[10px]">{new Date(ev.createdAt).toLocaleString()}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {timelineLeadId === lead.id && timelineEvents.length === 0 && (
+                                <p className="text-xs text-gray-600">No events recorded for this lead yet.</p>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -2549,6 +2675,16 @@ export function AdminDashboard() {
 
                     <div className="flex-1" />
 
+                    {/* Spam Score Check */}
+                    <button
+                      type="button"
+                      onClick={() => checkSpamScore(subject, body)}
+                      disabled={checkingSpam || (!subject && !body)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-white/5 disabled:opacity-30 transition-colors"
+                    >
+                      {checkingSpam ? 'Checking...' : 'Spam Check'}
+                    </button>
+
                     {/* Preview toggle */}
                     <button
                       type="button"
@@ -2561,6 +2697,48 @@ export function AdminDashboard() {
                       Preview
                     </button>
                   </div>
+
+                  {/* Spam Score Result */}
+                  {spamScore && (
+                    <div className={`mx-3 mt-2 p-3 rounded-xl border ${
+                      spamScore.rating === 'clean' ? 'bg-green-500/5 border-green-500/20' :
+                      spamScore.rating === 'low_risk' ? 'bg-blue-500/5 border-blue-500/20' :
+                      spamScore.rating === 'medium_risk' ? 'bg-yellow-500/5 border-yellow-500/20' :
+                      'bg-red-500/5 border-red-500/20'
+                    }`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-lg font-bold ${
+                            spamScore.rating === 'clean' ? 'text-green-400' :
+                            spamScore.rating === 'low_risk' ? 'text-blue-400' :
+                            spamScore.rating === 'medium_risk' ? 'text-yellow-400' :
+                            'text-red-400'
+                          }`}>{spamScore.score}/100</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            spamScore.rating === 'clean' ? 'bg-green-500/10 text-green-400' :
+                            spamScore.rating === 'low_risk' ? 'bg-blue-500/10 text-blue-400' :
+                            spamScore.rating === 'medium_risk' ? 'bg-yellow-500/10 text-yellow-400' :
+                            'bg-red-500/10 text-red-400'
+                          }`}>{spamScore.rating.replace('_', ' ')}</span>
+                        </div>
+                        <button onClick={() => setSpamScore(null)} className="text-gray-500 hover:text-white text-xs">dismiss</button>
+                      </div>
+                      {spamScore.issues.length > 0 && (
+                        <div className="space-y-1">
+                          {spamScore.issues.map((issue, i) => (
+                            <div key={i} className="flex items-center gap-2 text-xs">
+                              <span className="text-gray-500">{issue.category}:</span>
+                              <span className="text-gray-300">&quot;{issue.trigger}&quot;</span>
+                              <span className="text-gray-600">({issue.weight}pts)</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {spamScore.issues.length === 0 && (
+                        <p className="text-xs text-green-400">No spam triggers found. Your email looks clean!</p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Merge tags */}
                   <div className="flex items-center flex-wrap gap-1 px-3 py-2 bg-white/[0.015] border-x border-white/5">
@@ -3190,17 +3368,51 @@ export function AdminDashboard() {
                           </div>
                           <p className="text-xs text-gray-500">{acc.email} &middot; Day {acc.daysSinceStart} &middot; {acc.totalSent} total sent</p>
                         </div>
-                        <button
-                          onClick={async () => {
-                            if (!confirm('Delete this sending account?')) return;
-                            await fetch(`/api/admin/accounts?id=${acc.id}`, { method: 'DELETE', headers: headers() });
-                            fetchAccounts();
-                          }}
-                          className="p-2 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400"
-                        >
-                          <IconTrash />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => testConnection(acc.id)}
+                            disabled={testingConnection === acc.id}
+                            className="px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/5 text-xs text-gray-400 hover:text-white hover:border-white/10 disabled:opacity-40"
+                          >
+                            {testingConnection === acc.id ? 'Testing...' : 'Test Connection'}
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (!confirm('Delete this sending account?')) return;
+                              await fetch(`/api/admin/accounts?id=${acc.id}`, { method: 'DELETE', headers: headers() });
+                              fetchAccounts();
+                            }}
+                            className="p-2 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400"
+                          >
+                            <IconTrash />
+                          </button>
+                        </div>
                       </div>
+
+                      {/* Connection test results */}
+                      {connectionResults[acc.id] && (
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <div className={`rounded-lg p-3 border ${connectionResults[acc.id].smtp.success ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`w-2 h-2 rounded-full ${connectionResults[acc.id].smtp.success ? 'bg-green-500' : 'bg-red-500'}`} />
+                              <span className="text-xs font-medium">SMTP</span>
+                            </div>
+                            <p className="text-[10px] text-gray-400">
+                              {connectionResults[acc.id].smtp.success ? `Connected (${connectionResults[acc.id].smtp.latency}ms)` : connectionResults[acc.id].smtp.error?.slice(0, 60)}
+                            </p>
+                          </div>
+                          <div className={`rounded-lg p-3 border ${connectionResults[acc.id].imap.success ? 'bg-green-500/5 border-green-500/20' : 'bg-yellow-500/5 border-yellow-500/20'}`}>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`w-2 h-2 rounded-full ${connectionResults[acc.id].imap.success ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                              <span className="text-xs font-medium">IMAP</span>
+                            </div>
+                            <p className="text-[10px] text-gray-400">
+                              {connectionResults[acc.id].imap.success ? `Connected (${connectionResults[acc.id].imap.latency}ms)` : connectionResults[acc.id].imap.error?.slice(0, 60) || 'Not configured'}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="mt-3 flex items-center gap-4">
                         <div className="flex-1">
                           <div className="flex justify-between text-xs mb-1">
@@ -4105,6 +4317,13 @@ export function AdminDashboard() {
                             >
                               Check DNS
                             </button>
+                            <button
+                              onClick={() => checkBlacklist(domain.name)}
+                              disabled={checkingBlacklist}
+                              className="px-4 py-2 rounded-xl bg-purple-500/10 text-purple-400 text-sm hover:bg-purple-500/20 disabled:opacity-40"
+                            >
+                              {checkingBlacklist ? 'Checking...' : 'Blacklist Check'}
+                            </button>
                             {!domain.dkimPublicKey && (
                               <button
                                 onClick={async () => {
@@ -4168,6 +4387,27 @@ export function AdminDashboard() {
                                 </div>
                               );
                             })}
+                          </div>
+                        )}
+
+                        {/* Blacklist results */}
+                        {blacklistResult && blacklistResult.domain === domain.name && (
+                          <div className={`mt-3 p-4 rounded-xl border ${blacklistResult.clean ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className={`w-3 h-3 rounded-full ${blacklistResult.clean ? 'bg-green-500' : 'bg-red-500'}`} />
+                              <span className="text-sm font-medium">{blacklistResult.clean ? 'Clean — Not on any blacklists' : `Listed on ${blacklistResult.listedOn.length} blacklist(s)`}</span>
+                              <span className="text-[10px] text-gray-500 ml-auto">IP: {blacklistResult.ip} &middot; {blacklistResult.totalChecked} lists checked</span>
+                            </div>
+                            {blacklistResult.listedOn.length > 0 && (
+                              <div className="space-y-1 mt-2">
+                                {blacklistResult.listedOn.map((bl, i) => (
+                                  <div key={i} className="flex items-center gap-2 text-xs">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                    <span className="text-red-400">{bl.blacklist}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
 
