@@ -35,6 +35,14 @@ model Lead {
   lastBounceAt DateTime?
   bounceType   String?  // hard, soft
 
+  // Complaint tracking
+  complainedAt DateTime?  // When user reported as spam (FBL)
+  complaintSource String? // e.g. "gmail-fbl", "manual", "abuse-report"
+
+  // Engagement scoring
+  lastEngagedAt DateTime? // Last open, click, or reply
+  engagementScore Int     @default(0) // 0-100, calculated from activity
+
   // GDPR Compliance Fields
   consentGiven     Boolean   @default(false)
   consentTimestamp  DateTime?
@@ -256,4 +264,41 @@ model AuditLog {
 
   @@index([action])
   @@index([createdAt])
+}
+
+model SoftBounceQueue {
+  id         String   @id @default(cuid())
+  leadId     String
+  campaignId String?
+  email      String
+  subject    String
+  html       String
+  retries    Int      @default(0) // max 3
+  nextRetry  DateTime
+  error      String?
+  createdAt  DateTime @default(now())
+
+  @@index([nextRetry])
+  @@index([leadId])
+}
+
+model DeliverabilitySnapshot {
+  id             String   @id @default(cuid())
+  date           String   @unique // YYYY-MM-DD
+  totalSent      Int      @default(0)
+  totalBounced   Int      @default(0)
+  hardBounces    Int      @default(0)
+  softBounces    Int      @default(0)
+  complaints     Int      @default(0)
+  unsubscribes   Int      @default(0)
+  opens          Int      @default(0)
+  clicks         Int      @default(0)
+  replies        Int      @default(0)
+  bounceRate     Float    @default(0)
+  complaintRate  Float    @default(0)
+  unsubRate      Float    @default(0)
+  openRate       Float    @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([date])
 }

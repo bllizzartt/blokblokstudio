@@ -5,6 +5,7 @@ import { injectTracking } from '@/lib/tracking';
 import { buildEmailHtml } from '@/app/api/admin/campaign/route';
 import { getNextAccount, sendViaSMTP, recordSend, checkBounceThreshold } from '@/lib/smtp';
 import { processSpintax, pickVariant } from '@/lib/verify';
+import { isLeadEligible, checkRateLimit, reportSendSuccess, reportSendError, checkCampaignHealth, queueSoftBounceRetry, recordDailySnapshot } from '@/lib/deliverability';
 
 /**
  * Cron job — runs daily at 8am UTC.
@@ -40,23 +41,47 @@ export async function GET(req: NextRequest) {
     });
 
     const leadIdList = campaign.leadIds ? JSON.parse(campaign.leadIds) as string[] : null;
-    const where = leadIdList && leadIdList.length > 0
-      ? { id: { in: leadIdList }, unsubscribed: false }
-      : { unsubscribed: false };
 
-    const leads = await prisma.lead.findMany({
-      where,
-      select: { id: true, email: true, name: true, field: true, website: true, problem: true, emailsSent: true },
+    // Deliverability-safe lead query
+    const allLeads = await prisma.lead.findMany({
+      where: leadIdList && leadIdList.length > 0
+        ? { id: { in: leadIdList }, unsubscribed: false }
+        : { unsubscribed: false },
+      select: { id: true, email: true, name: true, field: true, website: true, problem: true, emailsSent: true, verifyResult: true, bounceType: true, bounceCount: true, complainedAt: true },
+    });
+
+    // Filter out ineligible leads (complained, hard-bounced, invalid, disposable)
+    const validLeads = allLeads.filter(l => {
+      if (l.complainedAt) return false; // Complaint suppression
+      if (l.bounceType === 'hard' || l.bounceCount >= 3) return false; // Hard bounce
+      if (l.verifyResult === 'invalid' || l.verifyResult === 'disposable') return false; // Bad email
+      return true;
     });
 
     // Parse A/B variants if present
     const variants = campaign.variants ? JSON.parse(campaign.variants) as { subject: string; body: string; weight: number }[] : null;
 
     let sentCount = 0;
-    for (const lead of leads) {
+    for (const lead of validLeads) {
+      // Rate limit check
+      const rl = checkRateLimit();
+      if (!rl.allowed) {
+        if (rl.waitMs > 5000) break;
+        await new Promise(r => setTimeout(r, rl.waitMs));
+      }
+
       // Check bounce threshold mid-campaign
       const paused = await checkBounceThreshold(campaign.id);
       if (paused) break;
+
+      // Check campaign health (bounce + unsub + complaint rates)
+      if (sentCount > 0 && sentCount % 10 === 0) {
+        const health = await checkCampaignHealth(campaign.id);
+        if (health.shouldPause) {
+          console.warn(`[Cron] Campaign ${campaign.id} auto-paused: ${health.reason}`);
+          break;
+        }
+      }
 
       // Pick A/B variant or use default
       const content = variants && variants.length > 0 ? pickVariant(variants) : { subject: campaign.subject, body: campaign.body };
@@ -89,7 +114,7 @@ export async function GET(req: NextRequest) {
       data: { sentTo: sentCount, sentAt: new Date(), status: sentCount > 0 ? 'sent' : 'failed' },
     });
 
-    results.push({ type: 'campaign', id: campaign.id, sentTo: sentCount, total: leads.length });
+    results.push({ type: 'campaign', id: campaign.id, sentTo: sentCount, total: validLeads.length, filtered: allLeads.length - validLeads.length });
   }
 
   // ── 2. Process sequence enrollments ──
@@ -133,6 +158,18 @@ export async function GET(req: NextRequest) {
       await prisma.sequenceEnrollment.update({
         where: { id: enrollment.id },
         data: { status: 'unsubscribed', nextSendAt: null },
+      });
+      continue;
+    }
+
+    // Deliverability check: skip ineligible leads
+    const eligibility = await isLeadEligible(enrollment.leadId);
+    if (!eligibility.eligible) {
+      // Don't permanently remove from sequence — just skip this round
+      const nextRetry = new Date(now.getTime() + 24 * 60 * 60 * 1000); // Try again tomorrow
+      await prisma.sequenceEnrollment.update({
+        where: { id: enrollment.id },
+        data: { nextSendAt: nextRetry },
       });
       continue;
     }
@@ -200,8 +237,42 @@ export async function GET(req: NextRequest) {
     results.push({ type: 'sequences', sent: seqSent, processed: enrollments.length });
   }
 
+  // ── 3. Process soft bounce retry queue ──
+  const retryQueue = await prisma.softBounceQueue.findMany({
+    where: { nextRetry: { lte: now }, retries: { lt: 3 } },
+    take: 20,
+  });
+
+  let retrySent = 0;
+  for (const item of retryQueue) {
+    const retryOk = await sendWithRotation(item.email, item.subject, item.html, item.leadId, item.campaignId || undefined);
+    if (retryOk) {
+      retrySent++;
+      await prisma.softBounceQueue.delete({ where: { id: item.id } });
+    } else {
+      // Increment retry and reschedule
+      const retryDelays = [6 * 60 * 60 * 1000, 24 * 60 * 60 * 1000, 48 * 60 * 60 * 1000];
+      const nextRetry = new Date(Date.now() + (retryDelays[item.retries] || retryDelays[2]));
+      await prisma.softBounceQueue.update({
+        where: { id: item.id },
+        data: { retries: item.retries + 1, nextRetry },
+      });
+    }
+  }
+
+  if (retryQueue.length > 0) {
+    results.push({ type: 'soft-bounce-retries', retried: retryQueue.length, succeeded: retrySent });
+  }
+
+  // ── 4. Record daily deliverability snapshot ──
+  try {
+    await recordDailySnapshot();
+  } catch (err) {
+    console.error('[Cron] Snapshot failed:', err);
+  }
+
   return NextResponse.json({
-    message: `Processed ${campaigns.length} campaign(s), ${enrollments.length} sequence step(s)`,
+    message: `Processed ${campaigns.length} campaign(s), ${enrollments.length} sequence step(s), ${retryQueue.length} retry(s)`,
     results,
   });
 }

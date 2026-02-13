@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { updateEngagement } from '@/lib/deliverability';
 
 // 1x1 transparent PNG pixel
 const PIXEL = Buffer.from(
@@ -98,6 +99,11 @@ async function logEvent(leadId: string, type: string, campaignId: string | null,
     await prisma.emailEvent.create({
       data: { leadId, type, campaignId, details },
     });
+
+    // Update engagement score on opens, clicks, replies
+    if (['opened', 'clicked', 'replied'].includes(type)) {
+      updateEngagement(leadId, type as 'opened' | 'clicked' | 'replied').catch(() => {});
+    }
   } catch {
     // Silently fail — don't break tracking
   }

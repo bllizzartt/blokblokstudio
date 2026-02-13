@@ -384,6 +384,17 @@ export function AdminDashboard() {
   const [vpsBlacklistResult, setVpsBlacklistResult] = useState<{ ip: string; clean: boolean; listedOn: { blacklist: string; type: string }[]; totalChecked: number; checkedAt: string } | null>(null);
   const [checkingVps, setCheckingVps] = useState(false);
 
+  // Deliverability Health
+  const [deliverabilityData, setDeliverabilityData] = useState<{
+    score: number;
+    rating: string;
+    factors: { name: string; score: number; status: 'good' | 'warning' | 'danger'; detail: string }[];
+    suppression: { hardBounces: number; complaints: number; unsubscribed: number; invalid: number; disposable: number; disengaged: number; total: number };
+    trend: { date: string; sent: number; bounceRate: number; complaintRate: number; openRate: number }[];
+    alerts: { level: 'danger' | 'warning' | 'info'; message: string }[];
+  } | null>(null);
+  const [fetchingDeliverability, setFetchingDeliverability] = useState(false);
+
   // Engagement timeline
   const [timelineLeadId, setTimelineLeadId] = useState<string | null>(null);
   const [timelineEvents, setTimelineEvents] = useState<EmailEvent[]>([]);
@@ -947,6 +958,18 @@ export function AdminDashboard() {
     } catch { /* silently fail */ }
   }, [headers]);
 
+  const fetchDeliverability = useCallback(async () => {
+    setFetchingDeliverability(true);
+    try {
+      const res = await fetch('/api/admin/deliverability', { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        setDeliverabilityData(data);
+      }
+    } catch { /* silently fail */ }
+    setFetchingDeliverability(false);
+  }, [headers]);
+
   const saveCurrentView = async () => {
     if (!newViewName.trim()) return;
     const filters = { search: searchQuery, field: filterField, status: filterStatus, verify: filterVerify, list: filterList };
@@ -1038,6 +1061,7 @@ export function AdminDashboard() {
         fetchSignatures();
         fetchCustomFields();
         fetchSavedViews();
+        fetchDeliverability();
       } else {
         const data = await res.json().catch(() => ({}));
         localStorage.removeItem('bb_admin_pw');
@@ -1076,8 +1100,9 @@ export function AdminDashboard() {
       fetchLists();
       fetchLeadEnrollments();
       fetchAnalytics();
+      fetchDeliverability();
     }
-  }, [authed, fetchLeads, fetchCampaigns, fetchAccounts, fetchSequences, fetchTemplates, fetchEvents, fetchLists, fetchLeadEnrollments, fetchAnalytics]);
+  }, [authed, fetchLeads, fetchCampaigns, fetchAccounts, fetchSequences, fetchTemplates, fetchEvents, fetchLists, fetchLeadEnrollments, fetchAnalytics, fetchDeliverability]);
 
   // ── Derived data ──
   const activeLeads = leads.filter(l => !l.unsubscribed);
@@ -1768,6 +1793,132 @@ export function AdminDashboard() {
                       </div>
                     )}
                   </div>
+                )}
+              </div>
+
+              {/* Deliverability Health Score */}
+              <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-semibold">Deliverability Health</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">Overall email sending reputation score</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {deliverabilityData && (
+                      <span className={`text-3xl font-bold ${
+                        deliverabilityData.score >= 80 ? 'text-green-400' :
+                        deliverabilityData.score >= 60 ? 'text-yellow-400' :
+                        deliverabilityData.score >= 40 ? 'text-orange-400' : 'text-red-400'
+                      }`}>
+                        {deliverabilityData.score}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => fetchDeliverability()}
+                      disabled={fetchingDeliverability}
+                      className="px-3 py-1.5 rounded-lg bg-white/[0.03] text-xs text-gray-400 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-50"
+                    >
+                      {fetchingDeliverability ? 'Checking...' : 'Refresh'}
+                    </button>
+                  </div>
+                </div>
+
+                {deliverabilityData ? (
+                  <div className="space-y-4">
+                    {/* Score bar */}
+                    <div className="relative h-3 bg-white/[0.03] rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-1000 ${
+                          deliverabilityData.score >= 80 ? 'bg-gradient-to-r from-green-500 to-emerald-400' :
+                          deliverabilityData.score >= 60 ? 'bg-gradient-to-r from-yellow-500 to-amber-400' :
+                          deliverabilityData.score >= 40 ? 'bg-gradient-to-r from-orange-500 to-amber-500' :
+                          'bg-gradient-to-r from-red-500 to-pink-500'
+                        }`}
+                        style={{ width: `${deliverabilityData.score}%` }}
+                      />
+                    </div>
+                    <p className={`text-xs font-medium ${
+                      deliverabilityData.score >= 80 ? 'text-green-400' :
+                      deliverabilityData.score >= 60 ? 'text-yellow-400' :
+                      deliverabilityData.score >= 40 ? 'text-orange-400' : 'text-red-400'
+                    }`}>
+                      {deliverabilityData.rating} — {deliverabilityData.score >= 80 ? 'Your sending reputation is excellent' :
+                      deliverabilityData.score >= 60 ? 'Good standing, minor improvements possible' :
+                      deliverabilityData.score >= 40 ? 'Action needed to prevent blacklisting' :
+                      'Critical — high risk of IP blacklisting'}
+                    </p>
+
+                    {/* Factor breakdown */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
+                      {deliverabilityData.factors.map(f => (
+                        <div key={f.name} className="rounded-xl bg-white/[0.02] border border-white/5 p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-gray-400">{f.name}</span>
+                            <span className={`w-2 h-2 rounded-full ${f.status === 'good' ? 'bg-green-400' : f.status === 'warning' ? 'bg-yellow-400' : 'bg-red-400'}`} />
+                          </div>
+                          <p className="text-xs text-gray-300 leading-relaxed">{f.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Alerts */}
+                    {deliverabilityData.alerts.length > 0 && (
+                      <div className="space-y-2 mt-4">
+                        <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Active Alerts</h4>
+                        {deliverabilityData.alerts.map((a, i) => (
+                          <div key={i} className={`flex items-start gap-2 px-3 py-2 rounded-lg text-xs ${
+                            a.level === 'danger' ? 'bg-red-500/10 text-red-400' :
+                            a.level === 'warning' ? 'bg-yellow-500/10 text-yellow-400' :
+                            'bg-blue-500/10 text-blue-400'
+                          }`}>
+                            <span className="mt-0.5">{a.level === 'danger' ? '!' : a.level === 'warning' ? '!' : 'i'}</span>
+                            <span>{a.message}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Suppression Stats */}
+                    <div className="mt-4 pt-4 border-t border-white/5">
+                      <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Suppression List ({deliverabilityData.suppression.total} protected)</h4>
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                        {[
+                          { label: 'Hard Bounces', value: deliverabilityData.suppression.hardBounces, color: 'text-red-400' },
+                          { label: 'Complaints', value: deliverabilityData.suppression.complaints, color: 'text-red-400' },
+                          { label: 'Unsubscribed', value: deliverabilityData.suppression.unsubscribed, color: 'text-yellow-400' },
+                          { label: 'Invalid', value: deliverabilityData.suppression.invalid, color: 'text-orange-400' },
+                          { label: 'Disposable', value: deliverabilityData.suppression.disposable, color: 'text-orange-400' },
+                          { label: 'Disengaged', value: deliverabilityData.suppression.disengaged, color: 'text-gray-400' },
+                        ].map(s => (
+                          <div key={s.label} className="text-center">
+                            <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+                            <p className="text-[10px] text-gray-600">{s.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Trend chart */}
+                    {deliverabilityData.trend.length > 2 && (
+                      <div className="mt-4 pt-4 border-t border-white/5">
+                        <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">30-Day Bounce Rate Trend</h4>
+                        <ResponsiveContainer width="100%" height={120}>
+                          <LineChart data={deliverabilityData.trend}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                            <XAxis dataKey="date" tick={{ fill: '#666', fontSize: 9 }} tickFormatter={(v: string) => v.slice(5)} />
+                            <YAxis tick={{ fill: '#666', fontSize: 9 }} unit="%" />
+                            <Tooltip contentStyle={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 11 }} />
+                            <Line type="monotone" dataKey="bounceRate" stroke="#ef4444" strokeWidth={1.5} dot={false} name="Bounce %" />
+                            <Line type="monotone" dataKey="openRate" stroke="#22c55e" strokeWidth={1.5} dot={false} name="Open %" />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-600 text-center py-8">
+                    {fetchingDeliverability ? 'Calculating deliverability score...' : 'Click Refresh to check your deliverability health'}
+                  </p>
                 )}
               </div>
 

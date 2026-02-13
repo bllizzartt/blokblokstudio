@@ -116,6 +116,25 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ campaigns: result });
     }
 
+    if (view === 'deliverability') {
+      const snapshots = await prisma.deliverabilitySnapshot.findMany({
+        where: { date: { gte: since.toISOString().slice(0, 10) } },
+        orderBy: { date: 'asc' },
+      });
+
+      return NextResponse.json({
+        data: snapshots.map(s => ({
+          date: s.date,
+          sent: s.totalSent,
+          bounced: s.totalBounced,
+          bounceRate: s.bounceRate,
+          complaintRate: s.complaintRate,
+          unsubRate: s.unsubRate,
+          openRate: s.openRate,
+        })),
+      });
+    }
+
     return NextResponse.json({ error: 'Invalid view parameter' }, { status: 400 });
   } catch (err) {
     console.error('[Analytics] Error:', err);

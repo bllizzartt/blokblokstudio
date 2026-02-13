@@ -85,16 +85,29 @@ export async function sendViaSMTP(
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error(`[SMTP] Failed to send via ${account.email} to ${to}:`, errMsg);
 
-    // Detect bounce types from SMTP error codes
-    const isBounce = errMsg.includes('550') || errMsg.includes('551') || errMsg.includes('552')
-      || errMsg.includes('553') || errMsg.includes('554') || errMsg.includes('User unknown')
-      || errMsg.includes('does not exist') || errMsg.includes('invalid') || errMsg.includes('rejected');
+    // Detect bounce types from SMTP error codes (comprehensive detection)
+    const isBounce = /\b(550|551|552|553|554|421|450|451|452)\b/.test(errMsg)
+      || errMsg.includes('User unknown') || errMsg.includes('does not exist')
+      || errMsg.includes('invalid') || errMsg.includes('rejected')
+      || errMsg.includes('mailbox full') || errMsg.includes('over quota')
+      || errMsg.includes('deferred') || errMsg.includes('rate limit')
+      || errMsg.includes('too many') || errMsg.includes('temporarily');
 
-    const isHardBounce = errMsg.includes('550') || errMsg.includes('551') || errMsg.includes('553')
-      || errMsg.includes('User unknown') || errMsg.includes('does not exist');
+    const isHardBounce = /\b(550|551|553|554)\b/.test(errMsg)
+      || errMsg.includes('User unknown') || errMsg.includes('does not exist')
+      || errMsg.includes('no such user') || errMsg.includes('mailbox not found');
+
+    // Soft bounces: temporary failures that may succeed on retry
+    const isSoftBounce = !isHardBounce && (
+      /\b(421|450|451|452|552)\b/.test(errMsg)
+      || errMsg.includes('mailbox full') || errMsg.includes('over quota')
+      || errMsg.includes('try again') || errMsg.includes('temporarily')
+      || errMsg.includes('deferred') || errMsg.includes('rate limit')
+      || errMsg.includes('too many connections') || errMsg.includes('greylisted')
+    );
 
     if (isBounce && leadId) {
-      const bounceType = isHardBounce ? 'hard' : 'soft';
+      const bounceType = isHardBounce ? 'hard' : isSoftBounce ? 'soft' : 'soft';
       await logEvent(leadId, 'bounced', campaignId, account.id, `${bounceType}: ${errMsg.slice(0, 200)}`);
 
       // Update lead bounce info

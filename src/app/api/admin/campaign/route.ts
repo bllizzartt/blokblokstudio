@@ -3,11 +3,17 @@ import { prisma } from '@/lib/prisma';
 import { checkAdmin } from '@/lib/admin-auth';
 import { sendCampaignEmail } from '@/lib/email';
 import { injectTracking } from '@/lib/tracking';
+import { filterEligibleLeads, checkRateLimit, reportSendSuccess, reportSendError, checkCampaignHealth } from '@/lib/deliverability';
 
 /**
  * POST /api/admin/campaign — create & queue a campaign
  * Returns immediately (fixes INP). Emails are sent by the cron processor
  * or inline for small batches (< 5 leads).
+ *
+ * Deliverability protections:
+ * - Filters out invalid, bounced, complained, disposable, and disengaged leads
+ * - Rate limits to prevent ISP throttling
+ * - Auto-pauses on high bounce/unsub/complaint rates
  */
 export async function POST(req: NextRequest) {
   const authError = checkAdmin(req);
@@ -19,18 +25,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing subject or body' }, { status: 400 });
   }
 
-  // Count target leads
+  // Count target leads (basic filter)
   const where = leadIds && leadIds.length > 0
-    ? { id: { in: leadIds }, unsubscribed: false }
+    ? { id: { in: leadIds as string[] }, unsubscribed: false }
     : { unsubscribed: false };
 
-  const leads = await prisma.lead.findMany({
+  const allLeads = await prisma.lead.findMany({
     where,
     select: { id: true, email: true, name: true, field: true, website: true, problem: true, unsubscribeToken: true },
   });
 
-  if (leads.length === 0) {
+  if (allLeads.length === 0) {
     return NextResponse.json({ error: 'No active leads to send to' }, { status: 400 });
+  }
+
+  // Apply deliverability filtering (skip invalid, bounced, complained, disengaged)
+  const { eligible, skipped } = await filterEligibleLeads(allLeads.map(l => l.id));
+  const leads = allLeads.filter(l => eligible.includes(l.id));
+
+  if (leads.length === 0) {
+    return NextResponse.json({
+      error: `All ${allLeads.length} leads were filtered out by deliverability protection`,
+      skipped,
+    }, { status: 400 });
   }
 
   // Determine status based on scheduling
@@ -61,15 +78,34 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Send immediately (all sizes) with tracking injection
+  // Send immediately (all sizes) with tracking injection + rate limiting
   let sentCount = 0;
+  let rateLimited = 0;
   for (const lead of leads) {
+    // Check rate limit before each send
+    const rl = checkRateLimit();
+    if (!rl.allowed) {
+      rateLimited++;
+      if (rl.waitMs > 5000) break; // If long backoff, stop sending
+      await new Promise(r => setTimeout(r, rl.waitMs));
+    }
+
+    // Check campaign health mid-send
+    if (sentCount > 0 && sentCount % 10 === 0) {
+      const health = await checkCampaignHealth(campaign.id);
+      if (health.shouldPause) {
+        console.warn(`[Campaign] Auto-paused: ${health.reason}`);
+        break;
+      }
+    }
+
     const html = buildEmailHtml(body, lead);
     const trackedHtml = injectTracking(html, lead.id, campaign.id);
     const personalizedSubject = personalizeText(subject, lead);
     const ok = await sendCampaignEmail({ to: lead.email, subject: personalizedSubject, html: trackedHtml, leadId: lead.id });
     if (ok) {
       sentCount++;
+      reportSendSuccess();
       await prisma.lead.update({
         where: { id: lead.id },
         data: { emailsSent: { increment: 1 }, lastEmailAt: new Date() },
@@ -80,6 +116,8 @@ export async function POST(req: NextRequest) {
           data: { leadId: lead.id, campaignId: campaign.id, type: 'sent' },
         });
       } catch { /* table may not exist */ }
+    } else {
+      reportSendError();
     }
   }
 
@@ -93,6 +131,8 @@ export async function POST(req: NextRequest) {
     campaignId: campaign.id,
     sentTo: sentCount,
     total: leads.length,
+    filtered: skipped.length,
+    rateLimited,
   });
 }
 
