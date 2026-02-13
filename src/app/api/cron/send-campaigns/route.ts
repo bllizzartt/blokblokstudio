@@ -50,11 +50,13 @@ export async function GET(req: NextRequest) {
       select: { id: true, email: true, name: true, field: true, website: true, problem: true, emailsSent: true, verifyResult: true, bounceType: true, bounceCount: true, complainedAt: true },
     });
 
-    // Filter out ineligible leads (complained, hard-bounced, invalid, disposable)
+    // Filter out ineligible leads (complained, hard-bounced, invalid, disposable, catch-all, role-based)
+    const rolePatterns = /^(info|admin|abuse|noreply|no-reply|postmaster|webmaster|hostmaster|support|security|sales|contact|help|billing)@/i;
     const validLeads = allLeads.filter(l => {
       if (l.complainedAt) return false; // Complaint suppression
       if (l.bounceType === 'hard' || l.bounceCount >= 3) return false; // Hard bounce
-      if (l.verifyResult === 'invalid' || l.verifyResult === 'disposable') return false; // Bad email
+      if (l.verifyResult === 'invalid' || l.verifyResult === 'disposable' || l.verifyResult === 'catch_all') return false;
+      if (rolePatterns.test(l.email)) return false; // Role-based addresses
       return true;
     });
 
@@ -75,7 +77,7 @@ export async function GET(req: NextRequest) {
       if (paused) break;
 
       // Check campaign health (bounce + unsub + complaint rates)
-      if (sentCount > 0 && sentCount % 10 === 0) {
+      if (sentCount > 0 && sentCount % 5 === 0) {
         const health = await checkCampaignHealth(campaign.id);
         if (health.shouldPause) {
           console.warn(`[Cron] Campaign ${campaign.id} auto-paused: ${health.reason}`);
@@ -106,7 +108,7 @@ export async function GET(req: NextRequest) {
           data: { emailsSent: { increment: 1 }, lastEmailAt: new Date(), status: lead.emailsSent === 0 ? 'contacted' : undefined },
         });
       }
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 300 + Math.random() * 700));
     }
 
     await prisma.emailCampaign.update({
@@ -230,7 +232,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 300 + Math.random() * 700));
   }
 
   if (seqSent > 0) {

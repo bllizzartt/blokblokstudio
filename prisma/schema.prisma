@@ -302,3 +302,47 @@ model DeliverabilitySnapshot {
 
   @@index([date])
 }
+
+model BlacklistCheck {
+  id          String   @id @default(cuid())
+  target      String   // IP address or domain
+  targetType  String   // "ip" or "domain"
+  clean       Boolean  @default(true)
+  listedOn    String?  // JSON array of blacklists where listed
+  totalChecked Int     @default(0)
+  checkedAt   DateTime @default(now())
+  autoAction  String?  // "paused_sending", "alert_sent", null
+
+  @@index([target])
+  @@index([checkedAt])
+}
+
+model DnsHealthCheck {
+  id           String   @id @default(cuid())
+  domain       String
+  ip           String?
+  spfStatus    String   @default("unknown")  // pass, fail, missing, unknown
+  dkimStatus   String   @default("unknown")
+  dmarcStatus  String   @default("unknown")
+  ptrStatus    String   @default("unknown")  // pass, fail, mismatch, missing
+  ptrHostname  String?
+  mxStatus     String   @default("unknown")
+  mxRecords    String?  // JSON array
+  overall      String   @default("unknown")  // healthy, warning, critical
+  details      String?  // JSON with full results
+  checkedAt    DateTime @default(now())
+
+  @@index([domain])
+  @@index([checkedAt])
+}
+
+model ListHygieneLog {
+  id          String   @id @default(cuid())
+  date        String   @unique // YYYY-MM-DD
+  action      String   // "sunset_disengaged", "purge_invalid", "auto_clean"
+  leadsAffected Int    @default(0)
+  details     String?  // JSON with breakdown
+  createdAt   DateTime @default(now())
+
+  @@index([date])
+}

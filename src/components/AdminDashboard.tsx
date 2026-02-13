@@ -372,7 +372,7 @@ export function AdminDashboard() {
   const [connectionResults, setConnectionResults] = useState<Record<string, { smtp: { success: boolean; latency: number; error?: string }; imap: { success: boolean; latency: number; error?: string } }>>({});
 
   // Spam score
-  const [spamScore, setSpamScore] = useState<{ score: number; rating: string; issues: { trigger: string; category: string; weight: number }[] } | null>(null);
+  const [spamScore, setSpamScore] = useState<{ score: number; rating: string; issues: { trigger: string; category: string; weight: number; fix?: string }[]; recommendations?: string[]; htmlQuality?: { ratio: number; imageCount: number; linkCount: number; hasPlainText: boolean; issues: string[] } } | null>(null);
   const [checkingSpam, setCheckingSpam] = useState(false);
 
   // Blacklist
@@ -392,8 +392,29 @@ export function AdminDashboard() {
     suppression: { hardBounces: number; complaints: number; unsubscribed: number; invalid: number; disposable: number; disengaged: number; total: number };
     trend: { date: string; sent: number; bounceRate: number; complaintRate: number; openRate: number }[];
     alerts: { level: 'danger' | 'warning' | 'info'; message: string }[];
+    blacklist?: { currentlyListed: string[]; recentChecks: { target: string; type: string; clean: boolean; listedOn: string | null; checkedAt: string; action: string | null }[] };
+    dnsHealth?: { domain: string; overall: string; score: number; spfStatus: string; dkimStatus: string; dmarcStatus: string; ptrStatus: string; checkedAt: string }[];
+    hygieneHistory?: { date: string; leadsAffected: number; details: string | null }[];
   } | null>(null);
   const [fetchingDeliverability, setFetchingDeliverability] = useState(false);
+
+  // DNS Health Check (deliverability monitor)
+  const [dnsHealthDomain, setDnsHealthDomain] = useState('');
+  const [dnsHealthResult, setDnsHealthResult] = useState<{
+    domain: string; ip: string | null; overall: string; score: number; issues: string[];
+    spf: { status: string; record: string | null; issues: string[] };
+    dkim: { status: string; selector: string; issues: string[] };
+    dmarc: { status: string; record: string | null; policy: string | null; issues: string[] };
+    ptr: { status: string; hostname: string | null; issues: string[] };
+    mx: { status: string; records: { exchange: string; priority: number }[]; issues: string[] };
+  } | null>(null);
+  const [checkingDnsHealth, setCheckingDnsHealth] = useState(false);
+
+  // List Hygiene
+  const [runningHygiene, setRunningHygiene] = useState(false);
+  const [hygieneResult, setHygieneResult] = useState<{
+    sunsetted: number; purgedInvalid: number; purgedBounced: number; purgedComplaints: number; totalCleaned: number;
+  } | null>(null);
 
   // Engagement timeline
   const [timelineLeadId, setTimelineLeadId] = useState<string | null>(null);
@@ -792,6 +813,53 @@ export function AdminDashboard() {
       }
     } catch { showToast('error', 'VPS blacklist check failed'); }
     setCheckingVps(false);
+  };
+
+  const checkDnsHealthForDomain = async (domain: string) => {
+    if (!domain) { showToast('error', 'Enter a domain'); return; }
+    setCheckingDnsHealth(true);
+    try {
+      const res = await fetch('/api/admin/deliverability', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ action: 'dns-health', domain }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDnsHealthResult(data);
+        if (data.overall === 'healthy') {
+          showToast('success', `DNS health check passed for ${domain}`);
+        } else if (data.overall === 'warning') {
+          showToast('error', `DNS issues found for ${domain} — check recommendations`);
+        } else {
+          showToast('error', `Critical DNS issues for ${domain} — fix before sending!`);
+        }
+      }
+    } catch { showToast('error', 'DNS health check failed'); }
+    setCheckingDnsHealth(false);
+  };
+
+  const runListHygieneNow = async () => {
+    setRunningHygiene(true);
+    try {
+      const res = await fetch('/api/admin/deliverability', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ action: 'run-hygiene' }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setHygieneResult(data);
+        if (data.totalCleaned > 0) {
+          showToast('success', `List hygiene: ${data.totalCleaned} leads cleaned`);
+        } else {
+          showToast('success', 'List is already clean — no leads to purge');
+        }
+        fetchLeads();
+        fetchDeliverability();
+      }
+    } catch { showToast('error', 'List hygiene failed'); }
+    setRunningHygiene(false);
   };
 
   const fetchTimeline = async (leadId: string) => {
@@ -1919,6 +1987,233 @@ export function AdminDashboard() {
                   <p className="text-sm text-gray-600 text-center py-8">
                     {fetchingDeliverability ? 'Calculating deliverability score...' : 'Click Refresh to check your deliverability health'}
                   </p>
+                )}
+              </div>
+
+              {/* DNS Health Monitor */}
+              <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-semibold">DNS Health Monitor</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">Verify SPF, DKIM, DMARC, PTR & MX records for your sending domains</p>
+                  </div>
+                  {dnsHealthResult && (
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                      dnsHealthResult.overall === 'healthy' ? 'bg-green-500/10 text-green-400' :
+                      dnsHealthResult.overall === 'warning' ? 'bg-yellow-500/10 text-yellow-400' :
+                      'bg-red-500/10 text-red-400'
+                    }`}>
+                      {dnsHealthResult.overall === 'healthy' ? 'HEALTHY' : dnsHealthResult.overall === 'warning' ? 'WARNING' : 'CRITICAL'}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex gap-2 mb-4">
+                  <input
+                    type="text"
+                    value={dnsHealthDomain}
+                    onChange={e => setDnsHealthDomain(e.target.value)}
+                    placeholder="Enter domain (e.g. tryblokblokstudio.com)"
+                    className="flex-1 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/5 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-orange-500"
+                    onKeyDown={e => e.key === 'Enter' && checkDnsHealthForDomain(dnsHealthDomain)}
+                  />
+                  <button
+                    onClick={() => checkDnsHealthForDomain(dnsHealthDomain)}
+                    disabled={checkingDnsHealth || !dnsHealthDomain}
+                    className="px-4 py-2 rounded-lg bg-orange-500/10 text-orange-400 text-sm font-medium hover:bg-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {checkingDnsHealth ? 'Checking...' : 'Check DNS'}
+                  </button>
+                </div>
+
+                {/* Deliverability API DNS health results (from daily monitor) */}
+                {deliverabilityData?.dnsHealth && deliverabilityData.dnsHealth.length > 0 && !dnsHealthResult && (
+                  <div className="space-y-2 mb-4">
+                    <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Last Monitor Scan</h4>
+                    {deliverabilityData.dnsHealth.map(d => (
+                      <div key={d.domain} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${
+                        d.overall === 'healthy' ? 'bg-green-500/5 border-green-500/20' :
+                        d.overall === 'warning' ? 'bg-yellow-500/5 border-yellow-500/20' :
+                        'bg-red-500/5 border-red-500/20'
+                      }`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${
+                            d.overall === 'healthy' ? 'bg-green-400' : d.overall === 'warning' ? 'bg-yellow-400' : 'bg-red-400'
+                          }`} />
+                          <span className="text-sm text-white">{d.domain}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {['spfStatus', 'dkimStatus', 'dmarcStatus', 'ptrStatus'].map(key => {
+                            const val = d[key as keyof typeof d] as string;
+                            return (
+                              <span key={key} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                val === 'pass' ? 'bg-green-500/10 text-green-400' :
+                                val === 'fail' ? 'bg-red-500/10 text-red-400' :
+                                'bg-gray-500/10 text-gray-400'
+                              }`}>
+                                {key.replace('Status', '').toUpperCase()}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* On-demand DNS check result */}
+                {dnsHealthResult && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>{dnsHealthResult.domain} {dnsHealthResult.ip ? `(${dnsHealthResult.ip})` : ''}</span>
+                      <span>Score: {dnsHealthResult.score}/100</span>
+                    </div>
+
+                    {/* DNS Record Status Grid */}
+                    <div className="grid grid-cols-5 gap-2">
+                      {[
+                        { label: 'SPF', status: dnsHealthResult.spf.status, record: dnsHealthResult.spf.record },
+                        { label: 'DKIM', status: dnsHealthResult.dkim.status, record: `selector: ${dnsHealthResult.dkim.selector}` },
+                        { label: 'DMARC', status: dnsHealthResult.dmarc.status, record: dnsHealthResult.dmarc.policy ? `p=${dnsHealthResult.dmarc.policy}` : null },
+                        { label: 'PTR', status: dnsHealthResult.ptr.status, record: dnsHealthResult.ptr.hostname },
+                        { label: 'MX', status: dnsHealthResult.mx.status, record: dnsHealthResult.mx.records[0]?.exchange || null },
+                      ].map(item => (
+                        <div key={item.label} className={`text-center p-2.5 rounded-xl border ${
+                          item.status === 'pass' ? 'bg-green-500/5 border-green-500/20' :
+                          item.status === 'fail' ? 'bg-red-500/5 border-red-500/20' :
+                          item.status === 'mismatch' ? 'bg-orange-500/5 border-orange-500/20' :
+                          'bg-gray-500/5 border-gray-500/20'
+                        }`}>
+                          <p className={`text-xs font-bold ${
+                            item.status === 'pass' ? 'text-green-400' :
+                            item.status === 'fail' ? 'text-red-400' :
+                            item.status === 'mismatch' ? 'text-orange-400' :
+                            'text-gray-400'
+                          }`}>{item.label}</p>
+                          <p className={`text-[10px] mt-0.5 ${
+                            item.status === 'pass' ? 'text-green-500' :
+                            item.status === 'fail' ? 'text-red-500' :
+                            'text-gray-500'
+                          }`}>{item.status.toUpperCase()}</p>
+                          {item.record && <p className="text-[9px] text-gray-600 mt-1 truncate" title={item.record}>{item.record}</p>}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Issues */}
+                    {dnsHealthResult.issues.length > 0 && (
+                      <div className="space-y-1.5 mt-2">
+                        <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Issues Found ({dnsHealthResult.issues.length})</h4>
+                        {dnsHealthResult.issues.slice(0, 8).map((issue, i) => (
+                          <div key={i} className="flex items-start gap-2 px-3 py-2 rounded-lg bg-yellow-500/5 border border-yellow-500/10 text-xs text-yellow-300">
+                            <span className="text-yellow-500 mt-0.5">!</span>
+                            <span>{issue}</span>
+                          </div>
+                        ))}
+                        {dnsHealthResult.issues.length > 8 && (
+                          <p className="text-[10px] text-gray-600 text-center">+{dnsHealthResult.issues.length - 8} more issues</p>
+                        )}
+                      </div>
+                    )}
+
+                    {dnsHealthResult.issues.length === 0 && (
+                      <div className="flex items-center gap-2 p-3 rounded-xl bg-green-500/5 border border-green-500/20">
+                        <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                        <span className="text-sm text-green-400">All DNS records configured correctly</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* List Hygiene */}
+              <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-semibold">List Hygiene</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">Automatically clean invalid, bounced, and disengaged leads from your list</p>
+                  </div>
+                  <button
+                    onClick={runListHygieneNow}
+                    disabled={runningHygiene}
+                    className="px-4 py-2 rounded-lg bg-orange-500/10 text-orange-400 text-sm font-medium hover:bg-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {runningHygiene ? 'Cleaning...' : 'Run Cleanup'}
+                  </button>
+                </div>
+
+                {/* Hygiene Result */}
+                {hygieneResult && (
+                  <div className="space-y-3 mb-4">
+                    <div className={`flex items-center gap-2 p-3 rounded-xl ${hygieneResult.totalCleaned > 0 ? 'bg-green-500/5 border border-green-500/20' : 'bg-gray-500/5 border border-gray-500/20'}`}>
+                      <span className={`w-2.5 h-2.5 rounded-full ${hygieneResult.totalCleaned > 0 ? 'bg-green-500' : 'bg-gray-500'}`} />
+                      <span className={`text-sm ${hygieneResult.totalCleaned > 0 ? 'text-green-400' : 'text-gray-400'}`}>
+                        {hygieneResult.totalCleaned > 0 ? `Cleaned ${hygieneResult.totalCleaned} leads` : 'List is clean — no action needed'}
+                      </span>
+                    </div>
+                    {hygieneResult.totalCleaned > 0 && (
+                      <div className="grid grid-cols-4 gap-2">
+                        {[
+                          { label: 'Disengaged', value: hygieneResult.sunsetted, color: 'text-gray-400' },
+                          { label: 'Invalid', value: hygieneResult.purgedInvalid, color: 'text-orange-400' },
+                          { label: 'Bounced', value: hygieneResult.purgedBounced, color: 'text-red-400' },
+                          { label: 'Complaints', value: hygieneResult.purgedComplaints, color: 'text-red-400' },
+                        ].map(s => (
+                          <div key={s.label} className="text-center p-2 rounded-lg bg-white/[0.02]">
+                            <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+                            <p className="text-[10px] text-gray-600">{s.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Hygiene History from daily cron */}
+                {deliverabilityData?.hygieneHistory && deliverabilityData.hygieneHistory.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Recent Auto-Cleanups</h4>
+                    {deliverabilityData.hygieneHistory.map(h => {
+                      const details = h.details ? JSON.parse(h.details) : {};
+                      return (
+                        <div key={h.date} className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.02] border border-white/5">
+                          <span className="text-xs text-gray-400">{h.date}</span>
+                          <div className="flex items-center gap-3 text-xs">
+                            {details.sunsetted > 0 && <span className="text-gray-500">{details.sunsetted} sunset</span>}
+                            {details.purgedInvalid > 0 && <span className="text-orange-400">{details.purgedInvalid} invalid</span>}
+                            {details.purgedBounced > 0 && <span className="text-red-400">{details.purgedBounced} bounced</span>}
+                            <span className="font-medium text-white">{h.leadsAffected} total</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Blacklist History from daily cron */}
+                {deliverabilityData?.blacklist && deliverabilityData.blacklist.recentChecks.length > 0 && (
+                  <div className="space-y-2 mt-4 pt-4 border-t border-white/5">
+                    <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Recent Blacklist Scans</h4>
+                    {deliverabilityData.blacklist.currentlyListed.length > 0 && (
+                      <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/5 border border-red-500/20">
+                        <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                        <span className="text-sm text-red-400">Currently listed: {deliverabilityData.blacklist.currentlyListed.join(', ')}</span>
+                      </div>
+                    )}
+                    {deliverabilityData.blacklist.recentChecks.slice(0, 5).map((check, i) => (
+                      <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${check.clean ? 'bg-green-500/5 border-green-500/10' : 'bg-red-500/5 border-red-500/10'}`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${check.clean ? 'bg-green-400' : 'bg-red-400'}`} />
+                          <span className="text-xs text-white">{check.target}</span>
+                          <span className="text-[10px] text-gray-600">{check.type}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                          {check.action && <span className="text-red-400">{check.action}</span>}
+                          <span>{new Date(check.checkedAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 
@@ -3296,6 +3591,27 @@ export function AdminDashboard() {
                           ))}
                         </div>
                       )}
+                            {spamScore.recommendations && spamScore.recommendations.length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-white/5">
+                                <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5">Recommendations</p>
+                                {spamScore.recommendations.map((rec: string, i: number) => (
+                                  <p key={i} className="text-xs text-blue-400 mb-1">• {rec}</p>
+                                ))}
+                              </div>
+                            )}
+                            {spamScore.htmlQuality && (
+                              <div className="mt-2 flex gap-2 flex-wrap">
+                                <span className={`px-2 py-0.5 rounded text-[10px] ${spamScore.htmlQuality.ratio >= 30 ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                                  Text ratio: {spamScore.htmlQuality.ratio}%
+                                </span>
+                                <span className={`px-2 py-0.5 rounded text-[10px] ${spamScore.htmlQuality.imageCount <= 3 ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                                  Images: {spamScore.htmlQuality.imageCount}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded text-[10px] ${spamScore.htmlQuality.linkCount <= 5 ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                                  Links: {spamScore.htmlQuality.linkCount}
+                                </span>
+                              </div>
+                            )}
                       {spamScore.issues.length === 0 && (
                         <p className="text-xs text-green-400">No spam triggers found. Your email looks clean!</p>
                       )}
@@ -4820,23 +5136,33 @@ export function AdminDashboard() {
                         </div>
                       </div>
 
-                      {/* Warmup phases */}
-                      <div className="mt-4 flex items-center gap-1">
-                        {[1, 2, 3, 4, 5].map(phase => (
-                          <div
-                            key={phase}
-                            className={`flex-1 h-1.5 rounded-full ${
-                              phase <= acc.warmupPhase ? 'bg-orange-500' : 'bg-white/5'
-                            }`}
-                          />
-                        ))}
-                      </div>
-                      <div className="flex justify-between text-[9px] text-gray-600 mt-1">
-                        <span>5/day</span>
-                        <span>15/day</span>
-                        <span>30/day</span>
-                        <span>50/day</span>
-                        <span>100/day</span>
+                      {/* Warmup phases — progression from Phase 1 (5/day) → Phase 5 (100/day) */}
+                      <div className="mt-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] text-gray-500">Warmup Progress</span>
+                          <span className="text-[10px] text-orange-400 font-medium">Phase {acc.warmupPhase} — {acc.dailyLimit}/day</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {[1, 2, 3, 4, 5].map(phase => (
+                            <div
+                              key={phase}
+                              className={`flex-1 h-2 rounded-full relative ${
+                                phase <= acc.warmupPhase ? 'bg-orange-500' : 'bg-white/5'
+                              }`}
+                            >
+                              {phase === acc.warmupPhase && (
+                                <div className="absolute -top-0.5 right-0 w-3 h-3 rounded-full bg-orange-400 border-2 border-[#0a0a0a]" />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex justify-between text-[9px] text-gray-600 mt-1">
+                          <span>5/day</span>
+                          <span>15</span>
+                          <span>30</span>
+                          <span>50</span>
+                          <span>100/day</span>
+                        </div>
                       </div>
 
                       {/* Warmup controls */}

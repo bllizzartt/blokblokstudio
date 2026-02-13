@@ -5,6 +5,7 @@ import {
   getSuppressionStats,
   recordDailySnapshot,
 } from '@/lib/deliverability';
+import { getBlacklistHistory, checkDnsHealth, runListHygiene } from '@/lib/blacklist-monitor';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -16,13 +17,16 @@ import { prisma } from '@/lib/prisma';
  *  - suppression stats (how many leads are being protected)
  *  - 30-day trend (daily snapshots)
  *  - active alerts (anything needing attention)
+ *  - blacklist status (latest scan results)
+ *  - DNS health (latest checks)
+ *  - list hygiene history
  */
 export async function GET(req: NextRequest) {
   const authError = checkAdmin(req);
   if (authError) return authError;
 
   try {
-    const [scoreData, suppressionData, snapshots] = await Promise.all([
+    const [scoreData, suppressionData, snapshots, blacklistData] = await Promise.all([
       getDeliverabilityScore(),
       getSuppressionStats(),
       prisma.deliverabilitySnapshot.findMany({
@@ -31,7 +35,47 @@ export async function GET(req: NextRequest) {
         },
         orderBy: { date: 'asc' },
       }),
+      getBlacklistHistory(7), // Last 7 days of blacklist checks
     ]);
+
+    // Get latest DNS health checks
+    let dnsHealth: { domain: string; overall: string; score: number; spfStatus: string; dkimStatus: string; dmarcStatus: string; ptrStatus: string; checkedAt: Date }[] = [];
+    try {
+      const checks = await prisma.dnsHealthCheck.findMany({
+        orderBy: { checkedAt: 'desc' },
+        take: 10,
+      });
+      // Deduplicate by domain (keep latest)
+      const seen = new Set<string>();
+      dnsHealth = checks.filter(c => {
+        if (seen.has(c.domain)) return false;
+        seen.add(c.domain);
+        return true;
+      }).map(c => ({
+        domain: c.domain,
+        overall: c.overall,
+        score: 0, // Computed from statuses
+        spfStatus: c.spfStatus,
+        dkimStatus: c.dkimStatus,
+        dmarcStatus: c.dmarcStatus,
+        ptrStatus: c.ptrStatus,
+        checkedAt: c.checkedAt,
+      }));
+    } catch { /* table may not exist */ }
+
+    // Get latest hygiene log
+    let hygieneHistory: { date: string; leadsAffected: number; details: string | null }[] = [];
+    try {
+      const logs = await prisma.listHygieneLog.findMany({
+        orderBy: { date: 'desc' },
+        take: 7,
+      });
+      hygieneHistory = logs.map(l => ({
+        date: l.date,
+        leadsAffected: l.leadsAffected,
+        details: l.details,
+      }));
+    } catch { /* table may not exist */ }
 
     // Generate alerts based on current factors
     const alerts: { level: 'danger' | 'warning' | 'info'; message: string }[] = [];
@@ -41,6 +85,23 @@ export async function GET(req: NextRequest) {
         alerts.push({ level: 'danger', message: `${factor.name}: ${factor.detail}` });
       } else if (factor.status === 'warning') {
         alerts.push({ level: 'warning', message: `${factor.name}: ${factor.detail}` });
+      }
+    }
+
+    // Blacklist alerts
+    if (blacklistData.currentlyListed.length > 0) {
+      alerts.push({
+        level: 'danger',
+        message: `⚠️ Listed on blacklist(s): ${blacklistData.currentlyListed.join(', ')}`,
+      });
+    }
+
+    // DNS health alerts
+    for (const dns of dnsHealth) {
+      if (dns.overall === 'critical') {
+        alerts.push({ level: 'danger', message: `DNS critical for ${dns.domain} — missing SPF/DKIM/DMARC` });
+      } else if (dns.overall === 'warning') {
+        alerts.push({ level: 'warning', message: `DNS warning for ${dns.domain} — check configuration` });
       }
     }
 
@@ -70,6 +131,19 @@ export async function GET(req: NextRequest) {
         complaintRate: s.complaintRate,
         openRate: s.openRate,
       })),
+      blacklist: {
+        currentlyListed: blacklistData.currentlyListed,
+        recentChecks: blacklistData.checks.slice(0, 10).map(c => ({
+          target: c.target,
+          type: c.targetType,
+          clean: c.clean,
+          listedOn: c.listedOn,
+          checkedAt: c.checkedAt,
+          action: c.autoAction,
+        })),
+      },
+      dnsHealth,
+      hygieneHistory,
       alerts,
     });
   } catch (err) {
@@ -86,13 +160,15 @@ export async function GET(req: NextRequest) {
  *  - mark-complaint: Mark lead(s) as complaint
  *  - clear-complaint: Remove complaint flag from lead
  *  - recalculate-engagement: Recalculate engagement scores for all leads
+ *  - run-hygiene: Force run list hygiene cleanup
+ *  - dns-health: Run DNS health check for a specific domain
  */
 export async function POST(req: NextRequest) {
   const authError = checkAdmin(req);
   if (authError) return authError;
 
   try {
-    const { action, leadIds, leadId } = await req.json();
+    const { action, leadIds, leadId, domain, ip } = await req.json();
 
     if (action === 'record-snapshot') {
       await recordDailySnapshot();
@@ -123,7 +199,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'recalculate-engagement') {
-      // Get all leads with recent events
       const leads = await prisma.lead.findMany({
         select: { id: true },
       });
@@ -144,7 +219,7 @@ export async function POST(req: NextRequest) {
         let score = 0;
         for (const event of recentEvents) {
           const daysAgo = Math.floor((Date.now() - event.createdAt.getTime()) / (1000 * 60 * 60 * 24));
-          const decay = Math.max(0, 1 - daysAgo / 90); // Linear decay over 90 days
+          const decay = Math.max(0, 1 - daysAgo / 90);
           const weight = event.type === 'replied' ? 50 : event.type === 'clicked' ? 25 : 10;
           score += weight * decay;
         }
@@ -160,6 +235,16 @@ export async function POST(req: NextRequest) {
       }
 
       return NextResponse.json({ success: true, updated });
+    }
+
+    if (action === 'run-hygiene') {
+      const result = await runListHygiene();
+      return NextResponse.json({ success: true, ...result });
+    }
+
+    if (action === 'dns-health' && domain) {
+      const health = await checkDnsHealth(domain, ip || undefined);
+      return NextResponse.json({ success: true, ...health });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

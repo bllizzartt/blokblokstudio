@@ -101,10 +101,16 @@ export async function isLeadEligible(leadId: string): Promise<{ eligible: boolea
     return { eligible: false, reason: `Hard bounce (${lead.bounceCount} bounces)` };
   }
 
-  // Email verification results
-  const blockedResults = ['invalid', 'disposable'];
+  // Email verification results — block invalid, disposable, and catch-all
+  const blockedResults = ['invalid', 'disposable', 'catch_all'];
   if (lead.verifyResult && blockedResults.includes(lead.verifyResult)) {
     return { eligible: false, reason: `Email ${lead.verifyResult}` };
+  }
+
+  // Block role-based emails (info@, admin@, noreply@, abuse@, etc.)
+  const rolePatterns = /^(info|admin|abuse|noreply|no-reply|postmaster|webmaster|hostmaster|support|security|sales|contact|help|billing)@/i;
+  if (rolePatterns.test(lead.email)) {
+    return { eligible: false, reason: 'Role-based email address' };
   }
 
   // Engagement check — suppress after 60 days of no engagement (if they've received 5+ emails)
@@ -136,6 +142,7 @@ export async function filterEligibleLeads(
     where: { id: { in: leadIds } },
     select: {
       id: true,
+      email: true,
       unsubscribed: true,
       emailVerified: true,
       verifyResult: true,
@@ -152,7 +159,8 @@ export async function filterEligibleLeads(
   const eligible: string[] = [];
   const skipped: { id: string; reason: string }[] = [];
 
-  const blockedResults = ['invalid', 'disposable'];
+  const blockedResults = ['invalid', 'disposable', 'catch_all'];
+  const rolePatterns = /^(info|admin|abuse|noreply|no-reply|postmaster|webmaster|hostmaster|support|security|sales|contact|help|billing)@/i;
 
   for (const lead of leads) {
     if (lead.unsubscribed) {
@@ -163,6 +171,8 @@ export async function filterEligibleLeads(
       skipped.push({ id: lead.id, reason: 'Hard bounce' });
     } else if (lead.verifyResult && blockedResults.includes(lead.verifyResult)) {
       skipped.push({ id: lead.id, reason: `Email ${lead.verifyResult}` });
+    } else if (rolePatterns.test(lead.email)) {
+      skipped.push({ id: lead.id, reason: 'Role-based email' });
     } else if (lead.emailsSent >= 5 && lead.lastEngagedAt) {
       const days = Math.floor((Date.now() - new Date(lead.lastEngagedAt).getTime()) / (1000 * 60 * 60 * 24));
       if (days > 60) {

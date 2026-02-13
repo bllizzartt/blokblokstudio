@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check campaign health mid-send
-    if (sentCount > 0 && sentCount % 10 === 0) {
+    if (sentCount > 0 && sentCount % 5 === 0) {
       const health = await checkCampaignHealth(campaign.id);
       if (health.shouldPause) {
         console.warn(`[Campaign] Auto-paused: ${health.reason}`);
