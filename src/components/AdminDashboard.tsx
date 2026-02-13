@@ -1034,7 +1034,9 @@ export function AdminDashboard() {
         const data = await res.json();
         setDeliverabilityData(data);
       }
-    } catch { /* silently fail */ }
+    } catch {
+      showToast('error', 'Failed to load deliverability data');
+    }
     setFetchingDeliverability(false);
   }, [headers]);
 
