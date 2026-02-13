@@ -48,6 +48,8 @@ export async function sendViaSMTP(
     campaignId?: string;
   }
 ): Promise<{ success: boolean; bounced: boolean; bounceType?: string }> {
+  const sendingDomain = account.email.split('@')[1] || 'localhost';
+
   const transporter = nodemailer.createTransport({
     host: account.smtpHost,
     port: account.smtpPort,
@@ -56,12 +58,25 @@ export async function sendViaSMTP(
       user: account.smtpUser,
       pass: decrypt(account.smtpPass), // Decrypt from AES-256-GCM
     },
+    name: sendingDomain,           // HELO/EHLO domain — must match PTR/rDNS
+    connectionTimeout: 10_000,     // 10s connection timeout
+    greetingTimeout: 10_000,       // 10s greeting timeout
+    socketTimeout: 30_000,         // 30s socket timeout
   });
 
-  const mailHeaders: Record<string, string> = {};
+  // Build RFC-compliant headers — ISPs flag emails missing these
+  const messageId = `<${(leadId || 'msg')}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}@${sendingDomain}>`;
+  const mailHeaders: Record<string, string> = {
+    'Message-ID': messageId,
+    'MIME-Version': '1.0',
+  };
   if (unsubscribeUrl) {
     mailHeaders['List-Unsubscribe'] = `<${unsubscribeUrl}>`;
     mailHeaders['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+  }
+  // Feedback-ID for ISP complaint tracking (Google FBL format)
+  if (campaignId) {
+    mailHeaders['Feedback-ID'] = `${campaignId}:${account.id}:blokblok`;
   }
 
   try {
@@ -73,6 +88,7 @@ export async function sendViaSMTP(
       html,
       text: text || undefined,
       headers: mailHeaders,
+      date: new Date(),            // Explicit Date header
     });
 
     // Log successful send event

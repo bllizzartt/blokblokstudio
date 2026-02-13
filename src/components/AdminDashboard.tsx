@@ -4820,23 +4820,33 @@ export function AdminDashboard() {
                         </div>
                       </div>
 
-                      {/* Warmup phases */}
-                      <div className="mt-4 flex items-center gap-1">
-                        {[1, 2, 3, 4, 5].map(phase => (
-                          <div
-                            key={phase}
-                            className={`flex-1 h-1.5 rounded-full ${
-                              phase <= acc.warmupPhase ? 'bg-orange-500' : 'bg-white/5'
-                            }`}
-                          />
-                        ))}
-                      </div>
-                      <div className="flex justify-between text-[9px] text-gray-600 mt-1">
-                        <span>5/day</span>
-                        <span>15/day</span>
-                        <span>30/day</span>
-                        <span>50/day</span>
-                        <span>100/day</span>
+                      {/* Warmup phases — progression from Phase 1 (5/day) → Phase 5 (100/day) */}
+                      <div className="mt-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] text-gray-500">Warmup Progress</span>
+                          <span className="text-[10px] text-orange-400 font-medium">Phase {acc.warmupPhase} — {acc.dailyLimit}/day</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {[1, 2, 3, 4, 5].map(phase => (
+                            <div
+                              key={phase}
+                              className={`flex-1 h-2 rounded-full relative ${
+                                phase <= acc.warmupPhase ? 'bg-orange-500' : 'bg-white/5'
+                              }`}
+                            >
+                              {phase === acc.warmupPhase && (
+                                <div className="absolute -top-0.5 right-0 w-3 h-3 rounded-full bg-orange-400 border-2 border-[#0a0a0a]" />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex justify-between text-[9px] text-gray-600 mt-1">
+                          <span>5/day</span>
+                          <span>15</span>
+                          <span>30</span>
+                          <span>50</span>
+                          <span>100/day</span>
+                        </div>
                       </div>
 
                       {/* Warmup controls */}
