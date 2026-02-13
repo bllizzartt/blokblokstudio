@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { checkAdmin } from '@/lib/admin-auth';
 
-// GET /api/admin/inbox — list inbox messages with filters
+// GET /api/admin/inbox — list inbox messages with filters, search, threading
 export async function GET(req: NextRequest) {
   const authError = checkAdmin(req);
   if (authError) return authError;
@@ -11,15 +11,49 @@ export async function GET(req: NextRequest) {
     const url = req.nextUrl;
     const filter = url.searchParams.get('filter') || 'all'; // all, unread, replies, auto
     const accountId = url.searchParams.get('accountId');
+    const search = url.searchParams.get('search')?.trim();
+    const threadEmail = url.searchParams.get('thread');       // Get all messages from this email
+    const singleId = url.searchParams.get('id');              // Get single message by ID
     const page = parseInt(url.searchParams.get('page') || '1');
     const limit = 50;
     const skip = (page - 1) * limit;
 
-    const where: Record<string, unknown> = {};
-    if (filter === 'unread') where.read = false;
-    if (filter === 'replies') { where.isAutoReply = false; where.isOOO = false; }
-    if (filter === 'auto') { where.isAutoReply = true; }
-    if (accountId) where.accountId = accountId;
+    // Single message detail
+    if (singleId) {
+      const message = await prisma.inboxMessage.findUnique({ where: { id: singleId } });
+      if (!message) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return NextResponse.json({ message });
+    }
+
+    // Thread view — all messages from a specific sender
+    if (threadEmail) {
+      const thread = await prisma.inboxMessage.findMany({
+        where: { fromEmail: threadEmail },
+        orderBy: { receivedAt: 'asc' },
+      });
+      return NextResponse.json({ thread, total: thread.length });
+    }
+
+    // Build where clause
+    const conditions: Record<string, unknown>[] = [];
+
+    if (filter === 'unread') conditions.push({ read: false });
+    if (filter === 'replies') { conditions.push({ isAutoReply: false }); conditions.push({ isOOO: false }); }
+    if (filter === 'auto') conditions.push({ isAutoReply: true });
+    if (accountId) conditions.push({ accountId });
+
+    // Search across fromEmail, subject, bodyPreview
+    if (search) {
+      conditions.push({
+        OR: [
+          { fromEmail: { contains: search, mode: 'insensitive' } },
+          { subject: { contains: search, mode: 'insensitive' } },
+          { bodyPreview: { contains: search, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    const where = conditions.length > 0 ? { AND: conditions } : {};
 
     const [messages, total] = await Promise.all([
       prisma.inboxMessage.findMany({

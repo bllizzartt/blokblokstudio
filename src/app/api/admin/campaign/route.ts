@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const authError = checkAdmin(req);
   if (authError) return authError;
 
-  const { subject, body, leadIds, scheduledAt, variants } = await req.json();
+  const { subject, body, leadIds, scheduledAt, variants, preheader } = await req.json();
 
   if (!subject || !body) {
     return NextResponse.json({ error: 'Missing subject or body' }, { status: 400 });
@@ -100,7 +100,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const html = buildEmailHtml(applyStylometricVariation(body, 0.5), lead);
+    const bodyWithPreheader = preheader
+      ? `<span style="display:none!important;font-size:0;max-height:0;line-height:0;mso-hide:all;overflow:hidden">${preheader}</span>${body}`
+      : body;
+    const html = buildEmailHtml(applyStylometricVariation(bodyWithPreheader, 0.5), lead);
     const trackedHtml = injectTracking(html, lead.id, campaign.id);
     const personalizedSubject = personalizeText(subject, lead);
     const ok = await sendCampaignEmail({ to: lead.email, subject: personalizedSubject, html: trackedHtml, leadId: lead.id });
