@@ -6,7 +6,7 @@
  *
  * This component renders the entire About page. It contains:
  *   1. Page header (title + subtitle)
- *   2. Team photo placeholder (gradient + icon, ready to swap for a real image)
+ *   2. Visual hero (abstract creative composition with floating discipline cards)
  *   3. Mission & Vision cards (side by side)
  *   4. Animated stats counters (150+ projects, 80+ clients, 8+ years, 25+ awards)
  *   5. Company values grid (4 values in a 2-column layout)
@@ -36,14 +36,10 @@
  * component. Change `value` to set the number the counter animates to, and
  * `suffix` for the character after the number (e.g. "+").
  *
- * ---- How to replace the team photo placeholder ----
- * The team photo area is currently a gradient with a placeholder icon.
- * To replace it with a real image:
- *   1. Import Image from 'next/image'
- *   2. Replace the placeholder <div> with:
- *        <Image src="/images/team.jpg" alt="Our team"
- *               fill className="object-cover rounded-3xl" />
- *   3. Remove the inner placeholder icon and "Team Photo" text
+ * ---- Visual hero section ----
+ * The hero area shows an abstract creative composition with pulsing
+ * gradient orbs and floating glass discipline cards (Design, Development,
+ * Strategy, Branding). Replace with a real team photo when available.
  *
  * ---- AnimatedCounter helper ----
  * A small internal component (defined at the top of this file) that counts
@@ -196,41 +192,62 @@ export function AboutContent() {
         </AnimatedSection>
 
         {/* ==================================================================
-         * 2. TEAM PHOTO PLACEHOLDER
-         * ==================================================================
-         * Currently shows a gradient background with a subtle grid pattern
-         * and a centered image-placeholder icon + "Team Photo" label.
-         *
-         * TO REPLACE WITH A REAL IMAGE:
-         *   1. Import Image from 'next/image'
-         *   2. Add the image file to /public/images/ (e.g. team.jpg)
-         *   3. Replace the inner content of this <div> with:
-         *        <Image
-         *          src="/images/team.jpg"
-         *          alt="Our team"
-         *          fill
-         *          className="object-cover"
-         *        />
-         *   4. Remove the placeholder icon <div> and <p> below.
-         *
-         * The aspect ratio is 16:9 on mobile, 21:9 on sm+ for a
-         * cinematic widescreen look.
+         * 2. VISUAL HERO — Abstract creative composition
          * ================================================================== */}
         <AnimatedSection delay={0.2} className="mb-14 sm:mb-20 lg:mb-24">
-          <div className="aspect-[16/9] sm:aspect-[21/9] rounded-2xl sm:rounded-3xl bg-gradient-to-br from-gray-900 to-gray-800 relative overflow-hidden">
-            {/* Subtle grid-line pattern overlay (decorative) */}
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:30px_30px] sm:bg-[size:50px_50px]" />
-            {/* Centered placeholder icon and label -- remove when using a real image */}
+          <div className="aspect-[16/9] sm:aspect-[21/9] rounded-2xl sm:rounded-3xl bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 relative overflow-hidden">
+            {/* Dot grid pattern */}
+            <div
+              className="absolute inset-0 opacity-20"
+              style={{
+                backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.15) 1px, transparent 0)',
+                backgroundSize: '32px 32px',
+              }}
+            />
+
+            {/* Animated gradient orbs */}
+            <div className="absolute top-[10%] left-[15%] w-40 h-40 sm:w-64 sm:h-64 rounded-full bg-orange-500/20 blur-3xl animate-pulse" />
+            <div className="absolute bottom-[10%] right-[10%] w-48 h-48 sm:w-72 sm:h-72 rounded-full bg-purple-600/15 blur-3xl animate-pulse [animation-delay:1s]" />
+            <div className="absolute top-[40%] right-[35%] w-32 h-32 sm:w-48 sm:h-48 rounded-full bg-blue-500/10 blur-3xl animate-pulse [animation-delay:2s]" />
+
+            {/* Floating glass cards representing disciplines */}
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border border-white/10 flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                  <svg className="w-6 h-6 sm:w-8 sm:h-8 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
+              <div className="relative w-full max-w-2xl h-full">
+                {/* Design card */}
+                <div className="absolute top-[15%] left-[8%] sm:left-[12%] px-4 py-3 sm:px-6 sm:py-4 rounded-2xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm transform -rotate-6 hover:rotate-0 transition-transform duration-500">
+                  <span className="text-2xl sm:text-3xl mr-2">🎨</span>
+                  <span className="text-xs sm:text-sm font-medium text-white/60">Design</span>
                 </div>
-                <p className="text-xs sm:text-sm text-white/20">Team Photo</p>
+                {/* Development card */}
+                <div className="absolute top-[20%] right-[5%] sm:right-[10%] px-4 py-3 sm:px-6 sm:py-4 rounded-2xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm transform rotate-3 hover:rotate-0 transition-transform duration-500">
+                  <span className="text-2xl sm:text-3xl mr-2">⚡</span>
+                  <span className="text-xs sm:text-sm font-medium text-white/60">Development</span>
+                </div>
+                {/* Strategy card */}
+                <div className="absolute bottom-[18%] left-[12%] sm:left-[18%] px-4 py-3 sm:px-6 sm:py-4 rounded-2xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm transform rotate-3 hover:rotate-0 transition-transform duration-500">
+                  <span className="text-2xl sm:text-3xl mr-2">📈</span>
+                  <span className="text-xs sm:text-sm font-medium text-white/60">Strategy</span>
+                </div>
+                {/* Branding card */}
+                <div className="absolute bottom-[22%] right-[8%] sm:right-[15%] px-4 py-3 sm:px-6 sm:py-4 rounded-2xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm transform -rotate-3 hover:rotate-0 transition-transform duration-500">
+                  <span className="text-2xl sm:text-3xl mr-2">✨</span>
+                  <span className="text-xs sm:text-sm font-medium text-white/60">Branding</span>
+                </div>
+
+                {/* Center tagline */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-center px-4">
+                    <p className="text-lg sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-orange-400 via-white to-purple-400 bg-clip-text text-transparent">
+                      We build brands that stand out
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
+
+            {/* Top & bottom edge fade for depth */}
+            <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-gray-950 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-gray-950 to-transparent" />
           </div>
         </AnimatedSection>
 
