@@ -1771,7 +1771,7 @@ export function AdminDashboard() {
               Export CSV
             </button>
             <button
-              onClick={() => { fetchLeads(); fetchCampaigns(); }}
+              onClick={() => { fetchLeads(); fetchCampaigns(); fetchLists(); }}
               className="flex items-center justify-center p-2 rounded-lg bg-white/[0.03] border border-white/5 text-gray-400 hover:text-white hover:bg-white/[0.06] transition-all"
               title="Refresh data"
             >
@@ -3046,12 +3046,21 @@ export function AdminDashboard() {
                   <h2 className="text-2xl font-bold">Lead Lists</h2>
                   <p className="text-sm text-gray-500 mt-1">Organize leads into lists, track sequence progress, and never lose track</p>
                 </div>
-                <button
-                  onClick={() => { setNewListName(''); setNewListDesc(''); setNewListColor('#f97316'); setShowCreateList(true); }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-medium"
-                >
-                  + New List
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => fetchLists()}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.03] border border-white/5 text-sm text-gray-400 hover:text-white"
+                  >
+                    <IconRefresh />
+                    Refresh
+                  </button>
+                  <button
+                    onClick={() => { setNewListName(''); setNewListDesc(''); setNewListColor('#f97316'); setShowCreateList(true); }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-medium"
+                  >
+                    + New List
+                  </button>
+                </div>
               </div>
 
               {/* Active list view */}
