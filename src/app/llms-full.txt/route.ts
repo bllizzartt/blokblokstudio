@@ -21,6 +21,7 @@ export async function GET() {
     'Website: https://blokblokstudio.com',
     'Email: hello@blokblokstudio.com',
     'Instagram: https://www.instagram.com/blokblokstudio/',
+    'LinkedIn: https://www.linkedin.com/company/blok-blok-studio/',
     '',
     '---',
     ''

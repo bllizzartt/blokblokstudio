@@ -845,6 +845,57 @@ function SocialProofToast() {
 }
 
 /* ================================================================
+ * PITCH VIDEO — Click-to-play video with poster overlay
+ * ================================================================ */
+function PitchVideo() {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const handlePlay = useCallback(() => {
+    setIsPlaying(true);
+    // Small delay to ensure the video element is rendered
+    setTimeout(() => {
+      videoRef.current?.play();
+    }, 100);
+  }, []);
+
+  return (
+    <div className="relative aspect-video rounded-2xl sm:rounded-3xl overflow-hidden border border-white/10">
+      {/* Video element (always mounted for preloading poster) */}
+      <video
+        ref={videoRef}
+        className="absolute inset-0 w-full h-full object-cover"
+        src="/videos/pitch.mp4"
+        poster="/videos/pitch-poster.jpg"
+        playsInline
+        controls={isPlaying}
+        preload="metadata"
+        onEnded={() => setIsPlaying(false)}
+      />
+
+      {/* Play overlay — hides once playing */}
+      {!isPlaying && (
+        <div
+          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 cursor-pointer bg-black/40"
+          onClick={handlePlay}
+        >
+          <motion.div
+            whileHover={{ scale: 1.1 }}
+            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center shadow-2xl shadow-orange-500/30"
+          >
+            <svg className="w-8 h-8 sm:w-10 sm:h-10 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </motion.div>
+          <p className="text-sm sm:text-base text-white/80 font-medium">Watch how we help brands grow</p>
+          <p className="text-xs text-white/40">1 min watch</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================
  * MAIN FUNNEL — Highly visual sales page for /audit
  * ================================================================ */
 export function FunnelContent() {
@@ -998,32 +1049,11 @@ export function FunnelContent() {
       </section>
 
       {/* ================================================================
-       * 4. VIDEO SALES LETTER — Visual video embed area
-       *
-       * TODO: Replace the placeholder with an actual video embed.
-       * Swap the inner div with: <iframe src="https://youtube.com/embed/..." />
+       * 4. VIDEO SALES LETTER — Pitch video
        * ================================================================ */}
       <Section className="py-8 sm:py-12 px-5 sm:px-6">
         <div className="max-w-4xl mx-auto">
-          <div className="relative aspect-video rounded-2xl sm:rounded-3xl overflow-hidden border border-white/10 group cursor-pointer">
-            {/* Gradient background */}
-            <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 via-black to-red-500/10" />
-            {/* Grid pattern overlay */}
-            <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
-            {/* Play button */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 z-10">
-              <motion.div
-                whileHover={{ scale: 1.1 }}
-                className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center shadow-2xl shadow-orange-500/30"
-              >
-                <svg className="w-8 h-8 sm:w-10 sm:h-10 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              </motion.div>
-              <p className="text-sm sm:text-base text-gray-400 font-medium">Watch how we help brands grow</p>
-              <p className="text-xs text-gray-600">2 min watch</p>
-            </div>
-          </div>
+          <PitchVideo />
         </div>
       </Section>
 

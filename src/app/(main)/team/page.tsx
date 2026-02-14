@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { TeamContent } from '@/components/TeamContent';
+import { BreadcrumbSchema } from '@/app/structured-data';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('team');
@@ -35,6 +36,10 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function TeamPage() {
   return (
     <div className="page-transition">
+      <BreadcrumbSchema items={[
+        { name: 'Home', url: '/' },
+        { name: 'Team', url: '/team' },
+      ]} />
       <TeamContent />
     </div>
   );

@@ -13,7 +13,15 @@ export async function generateMetadata(): Promise<Metadata> {
       title: `${t('title')} | Blok Blok Studio`,
       description: t('subtitle'),
       url: 'https://blokblokstudio.com/projects',
+      siteName: 'Blok Blok Studio',
       type: 'website',
+      images: [{ url: '/og-image.jpg', width: 1200, height: 630, alt: 'Blok Blok Studio Projects' }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${t('title')} | Blok Blok Studio`,
+      description: t('subtitle'),
+      images: ['/og-image.jpg'],
     },
   };
 }

@@ -2,7 +2,6 @@
 
 import type { BlogPost } from '@/data/blog';
 import { AnimatedSection } from './AnimatedSection';
-import Image from 'next/image';
 import Link from 'next/link';
 
 function MarkdownRenderer({ content }: { content: string }) {
@@ -123,16 +122,24 @@ export function BlogPostContent({ post }: { post: BlogPost }) {
           </p>
         </AnimatedSection>
 
-        {/* Featured Image */}
+        {/* Featured gradient cover */}
         <AnimatedSection delay={0.1} className="mb-10 sm:mb-14">
-          <div className="aspect-[16/9] relative rounded-2xl sm:rounded-3xl overflow-hidden">
-            <Image
-              src={post.image}
-              alt={post.title}
-              fill
-              className="object-cover"
-              priority
+          <div className={`aspect-[16/9] relative rounded-2xl sm:rounded-3xl overflow-hidden bg-gradient-to-br ${post.gradient}`}>
+            {/* Grid pattern overlay */}
+            <div
+              className="absolute inset-0 opacity-10"
+              style={{
+                backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.3) 1px, transparent 0)',
+                backgroundSize: '24px 24px',
+              }}
             />
+            {/* Floating decorative elements */}
+            <div className="absolute top-10 right-10 w-32 h-32 rounded-full bg-white/5 blur-3xl" />
+            <div className="absolute bottom-12 left-12 w-24 h-24 rounded-full bg-white/5 blur-2xl" />
+            {/* Category icon */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-8xl sm:text-9xl opacity-20">{post.icon}</span>
+            </div>
           </div>
         </AnimatedSection>
 

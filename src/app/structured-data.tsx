@@ -10,7 +10,6 @@ export function OrganizationSchema() {
     foundingDate: '2024',
     contactPoint: {
       '@type': 'ContactPoint',
-      telephone: '+1-555-000-0000',
       contactType: 'customer service',
       email: 'hello@blokblokstudio.com',
       availableLanguage: ['English', 'German', 'French', 'Spanish'],
@@ -21,8 +20,8 @@ export function OrganizationSchema() {
     ],
     address: {
       '@type': 'PostalAddress',
-      streetAddress: '123 Creative Ave',
-      addressLocality: 'Design District',
+      addressLocality: 'Berlin',
+      addressCountry: 'DE',
     },
     areaServed: {
       '@type': 'GeoShape',
@@ -183,12 +182,11 @@ export function LocalBusinessSchema() {
     name: 'Blok Blok Studio',
     image: 'https://blokblokstudio.com/og-image.jpg',
     url: 'https://blokblokstudio.com',
-    telephone: '+1-555-000-0000',
     email: 'hello@blokblokstudio.com',
     address: {
       '@type': 'PostalAddress',
-      streetAddress: '123 Creative Ave',
-      addressLocality: 'Design District',
+      addressLocality: 'Berlin',
+      addressCountry: 'DE',
     },
     priceRange: '$$',
     openingHoursSpecification: {
