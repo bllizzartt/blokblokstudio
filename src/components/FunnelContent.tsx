@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useInView, AnimatePresence } from 'framer-motion';
+import { motion, useInView } from 'framer-motion';
 import Image from 'next/image';
 import { useState, useRef, useEffect, useCallback } from 'react';
 
@@ -96,29 +96,6 @@ const trustedBrands = [
   { name: 'KDS Systems', image: '/images/projects/kdssys.png', url: 'kdssys.com', category: 'IT Services' },
 ];
 
-const moreTestimonials = [
-  {
-    quote: 'They completely changed how our customers experience our brand online. The ROI has been unreal. We saw a 5x return in the first quarter alone.',
-    name: 'David Kim',
-    role: 'CTO, NovaPay',
-    initials: 'DK',
-    stat: '5x ROI',
-  },
-  {
-    quote: 'From concept to launch in under a month. The speed and quality blew us away. Our conversion rate tripled overnight.',
-    name: 'Lisa Tran',
-    role: 'Founder, Luma Beauty',
-    initials: 'LT',
-    stat: '3x Conversions',
-  },
-  {
-    quote: 'We tried three agencies before finding Blok Blok. The difference is night and day. They actually understand what brands need to grow.',
-    name: 'Alex Hartley',
-    role: 'CMO, Prism Health',
-    initials: 'AH',
-    stat: '300% Growth',
-  },
-];
 
 const roadmapSteps = [
   {
@@ -741,140 +718,7 @@ function FAQItem({ q, a }: { q: string; a: string }) {
   );
 }
 
-/* ── Exit-Intent Popup ── */
-function ExitIntentPopup() {
-  const [show, setShow] = useState(false);
 
-  useEffect(() => {
-    const dismissed = sessionStorage.getItem('exit-popup-dismissed');
-    if (dismissed) return;
-
-    let timer: NodeJS.Timeout;
-    const handleMouseLeave = (e: MouseEvent) => {
-      if (e.clientY <= 5) {
-        timer = setTimeout(() => setShow(true), 100);
-      }
-    };
-    document.addEventListener('mouseleave', handleMouseLeave);
-    return () => {
-      document.removeEventListener('mouseleave', handleMouseLeave);
-      clearTimeout(timer);
-    };
-  }, []);
-
-  const dismiss = useCallback(() => {
-    setShow(false);
-    sessionStorage.setItem('exit-popup-dismissed', 'true');
-  }, []);
-
-  return (
-    <AnimatePresence>
-      {show && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-          onClick={dismiss}
-        >
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-          <motion.div
-            initial={{ scale: 0.9, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.9, y: 20 }}
-            onClick={(e) => e.stopPropagation()}
-            className="relative max-w-md w-full bg-gradient-to-br from-gray-900 to-black border border-orange-500/20 rounded-3xl p-8 sm:p-10 text-center"
-          >
-            <button
-              onClick={dismiss}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-            <div className="w-16 h-16 rounded-full bg-orange-500/10 flex items-center justify-center mx-auto mb-6">
-              <svg className="w-8 h-8 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            </div>
-            <h3 className="text-2xl font-bold mb-3">Hold On, Don&apos;t Leave Empty-Handed</h3>
-            <p className="text-gray-400 text-sm mb-6 leading-relaxed">
-              Get a free audit of your website. We&apos;ll show you exactly what&apos;s holding you back, no strings attached.
-            </p>
-            <button
-              onClick={() => {
-                dismiss();
-                scrollToAudit();
-              }}
-              className="w-full py-3.5 rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-semibold hover:from-orange-600 hover:to-red-600 transition-all"
-            >
-              Get My Free Audit
-            </button>
-            <p className="text-xs text-gray-600 mt-4">Takes 60 seconds.</p>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
-
-/* ── Social Proof Notification ── */
-function SocialProofToast() {
-  const [visible, setVisible] = useState(false);
-  const [current, setCurrent] = useState(0);
-
-  const notifications = [
-    { name: 'Sarah', location: 'London', action: 'booked a discovery call', time: '2 hours ago' },
-    { name: 'Marcus', location: 'New York', action: 'signed up for an audit', time: '4 hours ago' },
-    { name: 'Yuki', location: 'Tokyo', action: 'started a project', time: '6 hours ago' },
-    { name: 'Elena', location: 'Berlin', action: 'booked a discovery call', time: '8 hours ago' },
-    { name: 'James', location: 'Sydney', action: 'requested a proposal', time: '12 hours ago' },
-  ];
-
-  useEffect(() => {
-    const showTimer = setTimeout(() => {
-      setVisible(true);
-      const interval = setInterval(() => {
-        setVisible(false);
-        setTimeout(() => {
-          setCurrent((c) => (c + 1) % notifications.length);
-          setVisible(true);
-        }, 500);
-      }, 6000);
-      const hideAfter = setTimeout(() => {
-        clearInterval(interval);
-        setVisible(false);
-      }, 30000);
-      return () => { clearInterval(interval); clearTimeout(hideAfter); };
-    }, 8000);
-    return () => clearTimeout(showTimer);
-  }, []);
-
-  const n = notifications[current];
-
-  return (
-    <AnimatePresence>
-      {visible && (
-        <motion.div
-          initial={{ x: -100, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: -100, opacity: 0 }}
-          transition={{ duration: 0.3 }}
-          className="fixed bottom-6 left-6 z-50 max-w-xs"
-        >
-          <div className="bg-black/90 backdrop-blur-lg border border-white/10 rounded-2xl p-4 flex items-center gap-3 shadow-2xl">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500/20 to-red-500/20 flex items-center justify-center flex-shrink-0">
-              <span className="text-sm font-semibold text-orange-400">{n.name[0]}</span>
-            </div>
-            <div>
-              <p className="text-sm text-white">
-                <strong>{n.name}</strong> from {n.location}
-              </p>
-              <p className="text-xs text-gray-500">{n.action} &middot; {n.time}</p>
-            </div>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
 
 /* ================================================================
  * PITCH VIDEO — Click-to-play video with poster overlay
@@ -933,8 +777,6 @@ function PitchVideo() {
 export function FunnelContent() {
   return (
     <div className="page-transition overflow-hidden">
-      <ExitIntentPopup />
-      <SocialProofToast />
 
       {/* ================================================================
        * 1. BANNER — Urgency / announcement bar
@@ -943,7 +785,7 @@ export function FunnelContent() {
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-center gap-2 text-xs sm:text-sm">
           <span className="inline-block w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
           <span className="text-gray-300">
-            Limited Availability: Only accepting <strong className="text-orange-400">3 new clients</strong> this month
+            Free Website Audits: <strong className="text-orange-400">Personalized insights</strong> for your brand, delivered in 24 hours
           </span>
         </div>
       </div>
@@ -955,10 +797,10 @@ export function FunnelContent() {
         <div className="max-w-5xl mx-auto">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 sm:gap-8 text-center">
             {[
-              { value: 50, suffix: '+', label: 'Projects Delivered' },
-              { value: 40, suffix: '+', label: 'Happy Clients' },
-              { value: 5, suffix: '+', label: 'Years Experience' },
-              { value: 98, suffix: '%', label: 'Client Satisfaction' },
+              { value: 6, suffix: '', label: 'Brands Launched' },
+              { value: 6, suffix: '', label: 'Industries Served' },
+              { value: 100, suffix: '%', label: 'Custom Built' },
+              { value: 24, suffix: 'h', label: 'Audit Turnaround' },
             ].map((stat, i) => (
               <motion.div
                 key={i}
@@ -1095,7 +937,7 @@ export function FunnelContent() {
       <Section className="py-12 sm:py-16 px-5 sm:px-6 text-center">
         <div className="max-w-2xl mx-auto">
           <AccentDivider />
-          <p className="text-xs sm:text-sm uppercase tracking-[0.2em] text-orange-400/60 mb-4 mt-4">We&apos;ve helped 40+ brands grow</p>
+          <p className="text-xs sm:text-sm uppercase tracking-[0.2em] text-orange-400/60 mb-4 mt-4">See what we can build for your brand</p>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4">
             Ready to Transform Your Digital Presence?
           </h2>
@@ -1636,27 +1478,19 @@ export function FunnelContent() {
                   ))}
                 </ul>
 
-                {/* Social proof mini */}
+                {/* Trust reassurance */}
                 <div className="rounded-2xl p-5 sm:p-6 bg-white/[0.02] border border-white/5">
-                  <div className="flex items-center gap-1 mb-3">
-                    {[...Array(5)].map((_, j) => (
-                      <svg key={j} className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                       </svg>
-                    ))}
+                    </div>
+                    <p className="text-sm font-medium text-white">Your data is protected</p>
                   </div>
-                  <p className="text-sm text-gray-300 leading-relaxed mb-3">
-                    &ldquo;The audit alone was worth more than what other agencies charged us for a full consultation. Incredible value.&rdquo;
+                  <p className="text-sm text-gray-400 leading-relaxed">
+                    We&apos;ll never share your information. Audits are 100% free with no obligation.
                   </p>
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500/20 to-red-500/10 flex items-center justify-center border border-orange-500/10">
-                      <span className="text-[10px] font-medium text-orange-400/80">LT</span>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium">Lisa Tran</p>
-                      <p className="text-[10px] text-gray-500">Founder, Luma Beauty</p>
-                    </div>
-                  </div>
                 </div>
               </div>
             </motion.div>
@@ -1709,59 +1543,6 @@ export function FunnelContent() {
       </section>
 
       {/* ================================================================
-       * 16. SOCIAL PROOF — More testimonials with stats
-       * ================================================================ */}
-      <Section className="py-20 sm:py-28 lg:py-36 px-5 sm:px-6">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-14 sm:mb-20">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs mb-6">
-              Testimonials
-            </div>
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold">
-              Trusted by Brands That{' '}
-              <span className="bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent">Dare to Stand Out</span>
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-            {moreTestimonials.map((t, i) => (
-              <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: i * 0.1 }} variants={fadeUp}
-                className="rounded-2xl sm:rounded-3xl p-6 sm:p-8 flex flex-col bg-white/[0.02] border border-white/5 hover:border-orange-500/10 transition-colors">
-                {/* Stat badge */}
-                <div className="inline-flex self-start items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/10 text-orange-400 text-xs font-semibold mb-5">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-                  {t.stat}
-                </div>
-
-                {/* Stars */}
-                <div className="flex gap-1 mb-4">
-                  {[...Array(5)].map((_, j) => (
-                    <svg key={j} className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                  ))}
-                </div>
-
-                <p className="text-sm sm:text-base text-gray-300 leading-relaxed mb-6 flex-1">
-                  &ldquo;{t.quote}&rdquo;
-                </p>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500/20 to-red-500/10 flex items-center justify-center flex-shrink-0 border border-orange-500/10">
-                    <span className="text-xs font-medium text-orange-400/80">{t.initials}</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">{t.name}</p>
-                    <p className="text-xs text-gray-500">{t.role}</p>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </Section>
-
-      {/* ================================================================
        * 17. COMPARISON TABLE — DIY vs Freelancer vs Blok Blok
        * ================================================================ */}
       <section className="py-20 sm:py-28 px-5 sm:px-6 relative overflow-hidden">
@@ -1793,34 +1574,28 @@ export function FunnelContent() {
               </thead>
               <tbody>
                 {[
-                  { feature: 'Custom Design', diy: false, freelancer: true, us: true },
-                  { feature: 'SEO Optimization', diy: false, freelancer: false, us: true },
-                  { feature: 'Mobile-First', diy: false, freelancer: true, us: true },
-                  { feature: 'Conversion Strategy', diy: false, freelancer: false, us: true },
-                  { feature: 'Ongoing Support', diy: false, freelancer: false, us: true },
-                  { feature: 'Brand Strategy', diy: false, freelancer: false, us: true },
-                  { feature: 'Fast Turnaround', diy: true, freelancer: false, us: true },
-                  { feature: 'Scalable Code', diy: false, freelancer: false, us: true },
+                  { feature: 'Custom Design', diy: 'no', freelancer: 'yes', us: 'yes' },
+                  { feature: 'SEO Optimization', diy: 'no', freelancer: 'sometimes', us: 'yes' },
+                  { feature: 'Mobile-First', diy: 'no', freelancer: 'yes', us: 'yes' },
+                  { feature: 'Conversion Strategy', diy: 'no', freelancer: 'sometimes', us: 'yes' },
+                  { feature: 'Ongoing Support', diy: 'no', freelancer: 'no', us: 'yes' },
+                  { feature: 'Brand Strategy', diy: 'no', freelancer: 'no', us: 'yes' },
+                  { feature: 'Fast Turnaround', diy: 'sometimes', freelancer: 'sometimes', us: 'yes' },
+                  { feature: 'Scalable Code', diy: 'no', freelancer: 'sometimes', us: 'yes' },
                 ].map((row, i) => (
                   <tr key={i} className="border-b border-white/5">
                     <td className="py-3.5 pr-4 text-gray-300 font-medium">{row.feature}</td>
-                    <td className="py-3.5 px-4 text-center">
-                      {row.diy ? (
-                        <span className="text-yellow-500">~</span>
-                      ) : (
-                        <svg className="w-5 h-5 text-gray-700 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-4 text-center">
-                      {row.freelancer ? (
-                        <svg className="w-5 h-5 text-yellow-500 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                      ) : (
-                        <svg className="w-5 h-5 text-gray-700 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-4 text-center">
-                      <svg className="w-5 h-5 text-green-400 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                    </td>
+                    {([row.diy, row.freelancer, row.us] as string[]).map((val, j) => (
+                      <td key={j} className="py-3.5 px-4 text-center">
+                        {val === 'yes' ? (
+                          <svg className={`w-5 h-5 mx-auto ${j === 2 ? 'text-green-400' : 'text-yellow-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        ) : val === 'sometimes' ? (
+                          <span className="text-yellow-500/70 text-sm">~</span>
+                        ) : (
+                          <svg className="w-5 h-5 text-gray-700 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        )}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
