@@ -7,7 +7,7 @@ export function OrganizationSchema() {
     logo: 'https://blokblokstudio.com/logo.png',
     description:
       'A creative digital agency crafting bold brands, stunning websites, and digital products that move people.',
-    foundingDate: '2020',
+    foundingDate: '2024',
     contactPoint: {
       '@type': 'ContactPoint',
       telephone: '+1-555-000-0000',
@@ -16,10 +16,8 @@ export function OrganizationSchema() {
       availableLanguage: ['English', 'German', 'French', 'Spanish'],
     },
     sameAs: [
-      'https://twitter.com/blokblokstudio',
       'https://www.instagram.com/blokblokstudio/',
-      'https://linkedin.com/company/blokblokstudio',
-      'https://dribbble.com/blokblokstudio',
+      'https://www.linkedin.com/company/blok-blok-studio/',
     ],
     address: {
       '@type': 'PostalAddress',
@@ -199,11 +197,7 @@ export function LocalBusinessSchema() {
       opens: '09:00',
       closes: '18:00',
     },
-    aggregateRating: {
-      '@type': 'AggregateRating',
-      ratingValue: '4.9',
-      reviewCount: '40',
-    },
+    numberOfEmployees: '3',
   };
 
   return (

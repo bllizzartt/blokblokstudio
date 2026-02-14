@@ -109,9 +109,7 @@ export function Footer() {
    * -------------------------------------------------------------------------- */
   const socials = [
     { label: 'Instagram', href: 'https://www.instagram.com/blokblokstudio/' },
-    { label: 'Twitter / X', href: '#' },
-    { label: 'LinkedIn', href: '#' },
-    { label: 'Dribbble', href: '#' },
+    { label: 'LinkedIn', href: 'https://www.linkedin.com/company/blok-blok-studio/' },
   ];
 
   const [footerSubscribed, setFooterSubscribed] = useState(false);

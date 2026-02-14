@@ -47,6 +47,14 @@ const featuredProjects = [
     image: '/images/projects/public-affair.png',
     url: 'https://public-affair.com',
   },
+  {
+    title: 'KDS Systems',
+    category: 'Web Design',
+    year: '2025',
+    slug: 'kds-systems',
+    image: '/images/projects/kdssys.png',
+    url: 'https://kdssys.com',
+  },
 ];
 
 export function HomeProjects() {

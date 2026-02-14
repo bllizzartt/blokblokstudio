@@ -165,10 +165,10 @@ export function AboutContent() {
    * To remove one:  delete the object from this array.
    * ------------------------------------------------------------------ */
   const stats = [
-    { value: 150, suffix: '+', label: t('stats_projects') },
-    { value: 80, suffix: '+', label: t('stats_clients') },
-    { value: 8, suffix: '+', label: t('stats_years') },
-    { value: 25, suffix: '+', label: t('stats_awards') },
+    { value: 15, suffix: '+', label: t('stats_projects') },
+    { value: 11, suffix: '', label: t('stats_clients') },
+    { value: 2, suffix: '', label: t('stats_years') },
+    { value: 6, suffix: '+', label: t('stats_awards') },
   ];
 
   return (
