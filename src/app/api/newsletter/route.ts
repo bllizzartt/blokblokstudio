@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { rateLimit } from '@/lib/rate-limit';
+import { assignToList, NEWSLETTER_LIST } from '@/lib/auto-list';
+import { notifyNewsletterSignup } from '@/lib/telegram';
 
 // SOC 2 compliant rate limiting: 3 signups per IP per 15 minutes
 const limiter = rateLimit({ interval: 15 * 60 * 1000, maxRequests: 3 });
@@ -39,11 +41,12 @@ export async function POST(req: NextRequest) {
     const existing = await prisma.lead.findUnique({ where: { email } });
 
     if (existing) {
-      // Already in system — just return success (don't reveal they're already subscribed)
+      // Already in system — still add to newsletter list (they might be an audit lead subscribing)
+      await assignToList(existing.id, NEWSLETTER_LIST.name, NEWSLETTER_LIST.color);
       return NextResponse.json({ success: true });
     }
 
-    await prisma.lead.create({
+    const lead = await prisma.lead.create({
       data: {
         name: email.split('@')[0], // Use email prefix as name
         email,
@@ -54,6 +57,12 @@ export async function POST(req: NextRequest) {
         consentTimestamp: new Date(),
       },
     });
+
+    // Auto-assign to Weekly Insights list
+    await assignToList(lead.id, NEWSLETTER_LIST.name, NEWSLETTER_LIST.color);
+
+    // Notify via Telegram (non-blocking)
+    notifyNewsletterSignup(email).catch(() => {});
 
     return NextResponse.json({ success: true });
   } catch (err) {

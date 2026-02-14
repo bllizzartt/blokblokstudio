@@ -12,6 +12,7 @@ interface Lead {
   website: string | null;
   noWebsite: boolean;
   problem: string;
+  source: string;
   emailsSent: number;
   lastEmailAt: string | null;
   unsubscribed: boolean;
@@ -305,6 +306,7 @@ export function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterField, setFilterField] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterSource, setFilterSource] = useState('all');
   const [filterVerify, setFilterVerify] = useState('all');
   const [filterList, setFilterList] = useState('all');
   const [listMemberIds, setListMemberIds] = useState<Set<string>>(new Set());
@@ -1097,7 +1099,7 @@ export function AdminDashboard() {
 
   const saveCurrentView = async () => {
     if (!newViewName.trim()) return;
-    const filters = { search: searchQuery, field: filterField, status: filterStatus, verify: filterVerify, list: filterList };
+    const filters = { search: searchQuery, field: filterField, status: filterStatus, source: filterSource, verify: filterVerify, list: filterList };
     try {
       await fetch('/api/admin/saved-views', {
         method: 'POST',
@@ -1248,6 +1250,7 @@ export function AdminDashboard() {
       l.problem.toLowerCase().includes(searchQuery.toLowerCase());
     const matchField = filterField === 'all' || l.field === filterField;
     const matchStatus = filterStatus === 'all' || (l.status || 'new') === filterStatus;
+    const matchSource = filterSource === 'all' || (l.source || 'funnel') === filterSource;
     const matchVerify = filterVerify === 'all'
       || (filterVerify === 'verified' && l.emailVerified && l.verifyResult === 'valid')
       || (filterVerify === 'unverified' && !l.emailVerified)
@@ -1256,7 +1259,7 @@ export function AdminDashboard() {
       || (filterVerify === 'catch_all' && l.emailVerified && l.verifyResult === 'catch_all')
       || (filterVerify === 'disposable' && l.emailVerified && l.verifyResult === 'disposable');
     const matchList = filterList === 'all' || listMemberIds.has(l.id);
-    return matchSearch && matchField && matchStatus && matchVerify && matchList;
+    return matchSearch && matchField && matchStatus && matchSource && matchVerify && matchList;
   });
 
   // ── Actions ──
@@ -1794,7 +1797,7 @@ export function AdminDashboard() {
               {/* Stat cards */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { label: 'Total Leads', value: leads.length, color: 'from-blue-500 to-cyan-500', sub: `${recentLeads.length} this week` },
+                  { label: 'Total Leads', value: leads.length, color: 'from-blue-500 to-cyan-500', sub: `${leads.filter(l => (l.source || 'funnel') === 'newsletter').length} newsletter · ${leads.filter(l => (l.source || 'funnel') === 'funnel').length} audit · ${leads.filter(l => (l.source || 'funnel') === 'contact').length} contact` },
                   { label: 'Active Leads', value: activeLeads.length, color: 'from-green-500 to-emerald-500', sub: `${leads.length - activeLeads.length} unsubscribed` },
                   { label: 'Campaigns Sent', value: campaigns.filter(c => c.status === 'sent').length, color: 'from-orange-500 to-red-500', sub: `${campaigns.length} total` },
                   { label: 'Emails Delivered', value: totalEmailsSent, color: 'from-purple-500 to-pink-500', sub: `${activeLeads.length > 0 ? (totalEmailsSent / activeLeads.length).toFixed(1) : 0} avg per lead` },
@@ -2570,6 +2573,17 @@ export function AdminDashboard() {
                   <option value="not_interested">Not Interested</option>
                 </select>
                 <select
+                  value={filterSource}
+                  onChange={e => setFilterSource(e.target.value)}
+                  className="appearance-none bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 pr-10 text-sm text-gray-300 focus:outline-none focus:border-orange-500/30 transition-all cursor-pointer"
+                >
+                  <option value="all">All Sources</option>
+                  <option value="newsletter">Newsletter</option>
+                  <option value="funnel">Audit Form</option>
+                  <option value="contact">Contact Form</option>
+                  <option value="csv-import">CSV Import</option>
+                </select>
+                <select
                   value={filterVerify}
                   onChange={e => setFilterVerify(e.target.value)}
                   className="appearance-none bg-white/[0.03] border border-white/5 rounded-xl px-4 py-2.5 pr-10 text-sm text-gray-300 focus:outline-none focus:border-orange-500/30 transition-all cursor-pointer"
@@ -2670,6 +2684,12 @@ export function AdminDashboard() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-semibold text-sm sm:text-base">{lead.name}</h3>
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400">{lead.field}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                              (lead.source || 'funnel') === 'newsletter' ? 'bg-blue-500/10 text-blue-400' :
+                              (lead.source || 'funnel') === 'funnel' ? 'bg-orange-500/10 text-orange-300' :
+                              (lead.source || 'funnel') === 'contact' ? 'bg-purple-500/10 text-purple-400' :
+                              'bg-gray-500/10 text-gray-400'
+                            }`}>{(lead.source || 'funnel') === 'newsletter' ? 'Newsletter' : (lead.source || 'funnel') === 'funnel' ? 'Audit' : (lead.source || 'funnel') === 'contact' ? 'Contact' : 'Import'}</span>
                             <span className={`text-[10px] px-2 py-0.5 rounded-full ${
                               (lead.status || 'new') === 'new' ? 'bg-gray-500/10 text-gray-400' :
                               (lead.status || 'new') === 'contacted' ? 'bg-blue-500/10 text-blue-400' :

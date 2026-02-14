@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { rateLimit } from '@/lib/rate-limit';
+import { assignToList, CONTACT_LIST } from '@/lib/auto-list';
 
 // SOC 2 compliant rate limiting: 5 submissions per IP per 15 minutes
 const limiter = rateLimit({ interval: 15 * 60 * 1000, maxRequests: 5 });
@@ -40,6 +41,8 @@ export async function POST(req: NextRequest) {
     // Create or update the lead
     const existingLead = await prisma.lead.findUnique({ where: { email } });
 
+    let leadId: string;
+
     if (existingLead) {
       // Update existing lead with latest contact info
       await prisma.lead.update({
@@ -54,8 +57,9 @@ export async function POST(req: NextRequest) {
           consentIp,
         },
       });
+      leadId = existingLead.id;
     } else {
-      await prisma.lead.create({
+      const lead = await prisma.lead.create({
         data: {
           name,
           email,
@@ -68,7 +72,11 @@ export async function POST(req: NextRequest) {
           consentIp,
         },
       });
+      leadId = lead.id;
     }
+
+    // Auto-assign to Contact Inquiries list
+    await assignToList(leadId, CONTACT_LIST.name, CONTACT_LIST.color);
 
     // Send Telegram notification if configured
     const botToken = process.env.TELEGRAM_BOT_TOKEN;

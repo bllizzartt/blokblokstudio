@@ -59,6 +59,38 @@ export async function notifyTelegram(lead: {
   }
 }
 
+export async function notifyNewsletterSignup(email: string) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  if (!token || !chatId || token === 'YOUR_BOT_TOKEN_HERE') return;
+
+  const message = [
+    '📬 New Newsletter Subscriber!',
+    '',
+    `📧 Email: ${email}`,
+    '',
+    `📅 ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })}`,
+  ].join('\n');
+
+  try {
+    const res = await fetch(
+      `https://api.telegram.org/bot${token}/sendMessage`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: message }),
+      }
+    );
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('[Telegram] Newsletter notify failed:', err);
+    }
+  } catch (err) {
+    console.error('[Telegram] Newsletter error:', err);
+  }
+}
+
 export async function notifyReply(
   lead: { name: string; email: string },
   reply: { subject: string; sentiment: string; preview: string; accountEmail: string }
