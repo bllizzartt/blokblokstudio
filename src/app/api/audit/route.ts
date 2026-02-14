@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { notifyNewLead } from '@/lib/email';
 import { notifyTelegram } from '@/lib/telegram';
+import { assignToList, AUDIT_LIST } from '@/lib/auto-list';
 
 export async function POST(req: NextRequest) {
   try {
@@ -64,6 +65,9 @@ export async function POST(req: NextRequest) {
         consentIp,
       },
     });
+
+    // Auto-assign to Audit Leads list
+    await assignToList(lead.id, AUDIT_LIST.name, AUDIT_LIST.color);
 
     // Auto-enroll in designated sequence (if any)
     try {
