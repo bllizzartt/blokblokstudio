@@ -794,7 +794,7 @@ function ExitIntentPopup() {
             <button
               onClick={() => {
                 dismiss();
-                document.getElementById('audit-form')?.scrollIntoView({ behavior: 'smooth' });
+                document.getElementById('audit')?.scrollIntoView({ behavior: 'smooth' });
               }}
               className="w-full py-3.5 rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-semibold hover:from-orange-600 hover:to-red-600 transition-all"
             >
@@ -974,7 +974,7 @@ export function FunnelContent() {
       {/* ================================================================
        * 3. HERO — Bold headline with visual background
        * ================================================================ */}
-      <section className="relative py-24 sm:py-32 lg:py-40 px-5 sm:px-6 text-center overflow-hidden">
+      <section className="relative py-16 sm:py-20 lg:py-28 px-5 sm:px-6 text-center overflow-hidden">
         {/* Animated background orbs */}
         <motion.div
           className="absolute top-1/4 left-1/4 w-[600px] h-[600px] rounded-full bg-orange-500/[0.04] blur-[120px]"
@@ -997,9 +997,9 @@ export function FunnelContent() {
             <Image
               src="/logo.svg"
               alt="Blok Blok Studio"
-              width={160}
-              height={50}
-              className="h-10 sm:h-12 w-auto mx-auto"
+              width={240}
+              height={75}
+              className="h-14 sm:h-16 lg:h-20 w-auto mx-auto"
               priority
             />
           </motion.div>
@@ -1568,7 +1568,7 @@ export function FunnelContent() {
        * 14. FREE AUDIT — Lead capture form
        * Connected to /api/audit → Prisma DB + Email + Telegram notifications
        * ================================================================ */}
-      <section id="audit" className="py-20 sm:py-28 lg:py-36 px-5 sm:px-6 relative overflow-hidden">
+      <section id="audit" className="scroll-mt-8 py-20 sm:py-28 lg:py-36 px-5 sm:px-6 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-orange-500/[0.03] via-red-500/[0.015] to-transparent" />
         <motion.div
           className="absolute top-1/4 right-0 w-[500px] h-[500px] rounded-full bg-orange-500/[0.03] blur-[120px]"
