@@ -48,6 +48,7 @@ import { motion } from 'framer-motion';
 export function HomeNewsletter() {
   const t = useTranslations('home');
   const [submitted, setSubmitted] = useState(false);
+  const [alreadySubscribed, setAlreadySubscribed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,14 +58,18 @@ export function HomeNewsletter() {
     try {
       const form = e.target as HTMLFormElement;
       const email = new FormData(form).get('email');
-      await fetch('/api/newsletter', {
+      const res = await fetch('/api/newsletter', {
         method: 'POST',
         body: JSON.stringify({ email }),
         headers: { 'Content-Type': 'application/json' },
       });
-      setSubmitted(true);
+
+      if (res.status === 409) {
+        setAlreadySubscribed(true);
+      } else {
+        setSubmitted(true);
+      }
     } catch {
-      // Still show success to avoid leaking subscription status
       setSubmitted(true);
     } finally {
       setSubmitting(false);
@@ -119,19 +124,19 @@ export function HomeNewsletter() {
                 {t('newsletter_subtitle')}
               </p>
 
-              {submitted ? (
-                /* ── SUCCESS STATE ──
-                   Shown after form submission. Fades in with scale animation.
-                */
+              {submitted || alreadySubscribed ? (
+                /* ── SUCCESS / ALREADY SUBSCRIBED STATE ── */
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="flex items-center justify-center gap-2 text-green-400"
+                  className={`flex items-center justify-center gap-2 ${alreadySubscribed ? 'text-yellow-400' : 'text-green-400'}`}
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={alreadySubscribed ? 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' : 'M5 13l4 4L19 7'} />
                   </svg>
-                  <span className="text-sm sm:text-base font-medium">You&apos;re subscribed!</span>
+                  <span className="text-sm sm:text-base font-medium">
+                    {alreadySubscribed ? 'You are already subscribed' : "You're subscribed!"}
+                  </span>
                 </motion.div>
               ) : (
                 /* ── NEWSLETTER FORM ──

@@ -41,8 +41,21 @@ export async function POST(req: NextRequest) {
     const existing = await prisma.lead.findUnique({ where: { email } });
 
     if (existing) {
-      // Already in system — still add to newsletter list (they might be an audit lead subscribing)
+      // Check if they're already in the newsletter list
+      const list = await prisma.leadList.findFirst({ where: { name: NEWSLETTER_LIST.name } });
+      if (list) {
+        const alreadyMember = await prisma.leadListMember.findUnique({
+          where: { listId_leadId: { listId: list.id, leadId: existing.id } },
+        });
+        if (alreadyMember) {
+          return NextResponse.json({ error: 'You are already subscribed' }, { status: 409 });
+        }
+      }
+
+      // Existing lead (e.g. from audit/contact) subscribing to newsletter for the first time
       await assignToList(existing.id, NEWSLETTER_LIST.name, NEWSLETTER_LIST.color);
+      await notifyNewsletterSignup(email);
+
       return NextResponse.json({ success: true });
     }
 
@@ -61,8 +74,8 @@ export async function POST(req: NextRequest) {
     // Auto-assign to Weekly Insights list
     await assignToList(lead.id, NEWSLETTER_LIST.name, NEWSLETTER_LIST.color);
 
-    // Notify via Telegram (non-blocking)
-    notifyNewsletterSignup(email).catch(() => {});
+    // Notify via Telegram (awaited so Vercel doesn't kill the process before it sends)
+    await notifyNewsletterSignup(email);
 
     return NextResponse.json({ success: true });
   } catch (err) {

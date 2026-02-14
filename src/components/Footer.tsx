@@ -113,19 +113,26 @@ export function Footer() {
   ];
 
   const [footerSubscribed, setFooterSubscribed] = useState(false);
+  const [footerAlreadySubscribed, setFooterAlreadySubscribed] = useState(false);
 
   const handleFooterNewsletter = async (e: React.FormEvent) => {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
     const email = new FormData(form).get('email');
     try {
-      await fetch('/api/newsletter', {
+      const res = await fetch('/api/newsletter', {
         method: 'POST',
         body: JSON.stringify({ email }),
         headers: { 'Content-Type': 'application/json' },
       });
-    } catch { /* ignore */ }
-    setFooterSubscribed(true);
+      if (res.status === 409) {
+        setFooterAlreadySubscribed(true);
+      } else {
+        setFooterSubscribed(true);
+      }
+    } catch {
+      setFooterSubscribed(true);
+    }
   };
 
   return (
@@ -262,12 +269,12 @@ export function Footer() {
             <h4 className="text-sm font-medium mb-4 sm:mb-6 text-gray-300">
               {t('newsletter_title')}
             </h4>
-            {footerSubscribed ? (
-              <p className="text-green-400 text-sm flex items-center gap-1.5">
+            {footerSubscribed || footerAlreadySubscribed ? (
+              <p className={`text-sm flex items-center gap-1.5 ${footerAlreadySubscribed ? 'text-yellow-400' : 'text-green-400'}`}>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={footerAlreadySubscribed ? 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' : 'M5 13l4 4L19 7'} />
                 </svg>
-                Subscribed!
+                {footerAlreadySubscribed ? 'You are already subscribed' : 'Subscribed!'}
               </p>
             ) : (
               <>
