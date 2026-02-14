@@ -408,7 +408,7 @@ const faqs = [
 function scrollToAudit() {
   const el = document.getElementById('audit');
   if (!el) return;
-  const top = el.getBoundingClientRect().top + window.scrollY + 160;
+  const top = el.getBoundingClientRect().top + window.scrollY - 20;
   window.scrollTo({ top, behavior: 'smooth' });
 }
 
