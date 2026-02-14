@@ -102,7 +102,6 @@ const allProjects = [
   { id: 3, title: 'Exotic Ripz', category: 'web', year: '2025', desc: 'Vibrant e-commerce platform for a collectible trading card community brand.', slug: 'exotic-ripz', image: '/images/projects/exoticripz.png' },
   { id: 4, title: 'The New School', category: 'web', year: '2024', desc: 'Institutional web presence for The New School\'s Center for Military-Affiliated Students.', slug: 'military-newschool', image: '/images/projects/military-newschool.png' },
   { id: 5, title: 'Public Affair', category: 'brand', year: '2024', desc: 'Sophisticated brand identity and web experience for a premium lifestyle brand.', slug: 'public-affair', image: '/images/projects/public-affair.png' },
-  { id: 6, title: 'KDS Systems', category: 'web', year: '2025', desc: 'Modern cloud solutions platform for a managed IT and cloud computing services provider.', slug: 'kds-systems', image: '/images/projects/kdssys.png' },
 ];
 
 /**
