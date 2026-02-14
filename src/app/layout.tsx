@@ -115,6 +115,7 @@ export default async function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="manifest" href="/manifest.json" />
+        <link rel="llms" href="/llms.txt" type="text/plain" title="LLM Content" />
       </head>
       <body className="bg-black text-white antialiased font-sans noise-overlay">
         <OrganizationSchema />

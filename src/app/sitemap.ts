@@ -43,13 +43,27 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'monthly' as const,
       priority: 0.6,
     })),
-    // Blog posts
+    // Blog posts (HTML)
     ...blogSlugs.map((slug) => ({
       url: `${baseUrl}/blog/${slug}`,
       lastModified: new Date(),
       changeFrequency: 'weekly' as const,
       priority: 0.7,
     })),
+    // Blog posts (Markdown for AI)
+    ...blogSlugs.map((slug) => ({
+      url: `${baseUrl}/blog/${slug}/markdown`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.5,
+    })),
+    // LLM discovery files
+    {
+      url: `${baseUrl}/llms.txt`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.4,
+    },
   ];
 
   return entries;
