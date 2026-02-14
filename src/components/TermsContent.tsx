@@ -25,7 +25,6 @@
 
 import { useTranslations } from 'next-intl';
 import { AnimatedSection } from './AnimatedSection';
-import { motion } from 'framer-motion';
 
 export function TermsContent() {
   const t = useTranslations('terms');
@@ -170,28 +169,70 @@ export function TermsContent() {
             <h2 className="text-2xl font-bold mb-4">Governing Law</h2>
             <p className="text-gray-400 leading-relaxed">
               These Terms of Service shall be governed by and construed in accordance with the laws of the
-              jurisdiction in which Blok Blok Studio operates, without regard to its conflict of law provisions.
-              Any disputes arising from these terms or your use of our services shall be resolved in the courts
-              of that jurisdiction.
+              Federal Republic of Germany and applicable European Union regulations, including the GDPR.
+              Any disputes arising from these terms or your use of our services shall be subject to the
+              exclusive jurisdiction of the courts of Germany.
             </p>
           </div>
         </AnimatedSection>
 
         {/* ==================================================================
-         * 8. CHANGES TO TERMS
+         * 8. DISPUTE RESOLUTION
          * ================================================================== */}
-        <AnimatedSection delay={0.4}>
+        <AnimatedSection delay={0.4} className="mb-8 sm:mb-12">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8">
+            <h2 className="text-2xl font-bold mb-4">Dispute Resolution</h2>
+            <p className="text-gray-400 leading-relaxed mb-4">
+              In the event of a dispute arising from these terms, we encourage you to contact us first to seek
+              an amicable resolution. If a resolution cannot be reached informally, the following process applies:
+            </p>
+            <ul className="space-y-3 text-gray-400">
+              <li className="flex items-start gap-3">
+                <span className="text-white/40 mt-1">&bull;</span>
+                <span><strong className="text-white">Informal Resolution:</strong> Contact us at hello@blokblokstudio.com. We will attempt to resolve the matter within 30 days.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-white/40 mt-1">&bull;</span>
+                <span><strong className="text-white">Formal Proceedings:</strong> If informal resolution fails, disputes will be resolved through the competent courts of Germany.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-white/40 mt-1">&bull;</span>
+                <span><strong className="text-white">EU Consumers:</strong> If you are a consumer in the EU, you may also use the European Commission&apos;s Online Dispute Resolution platform.</span>
+              </li>
+            </ul>
+          </div>
+        </AnimatedSection>
+
+        {/* ==================================================================
+         * 9. SEVERABILITY
+         * ================================================================== */}
+        <AnimatedSection delay={0.45} className="mb-8 sm:mb-12">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8">
+            <h2 className="text-2xl font-bold mb-4">Severability</h2>
+            <p className="text-gray-400 leading-relaxed">
+              If any provision of these Terms of Service is found to be invalid, illegal, or unenforceable by
+              a court of competent jurisdiction, the remaining provisions shall continue in full force and
+              effect. The invalid or unenforceable provision will be modified to the minimum extent necessary
+              to make it valid and enforceable while preserving the original intent of the parties.
+            </p>
+          </div>
+        </AnimatedSection>
+
+        {/* ==================================================================
+         * 10. CHANGES TO TERMS
+         * ================================================================== */}
+        <AnimatedSection delay={0.5}>
           <div className="bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8">
             <h2 className="text-2xl font-bold mb-4">Changes to Terms</h2>
             <p className="text-gray-400 leading-relaxed mb-4">
               We reserve the right to modify these Terms of Service at any time. If we make material changes,
-              we will notify you by updating the "Last updated" date at the top of this page. Your continued
+              we will notify you by updating the &ldquo;Last updated&rdquo; date at the top of this page. Your continued
               use of our services after such modifications constitutes your acceptance of the updated terms.
             </p>
             <p className="text-gray-400 leading-relaxed">
               If you have any questions about these Terms of Service, please contact us at{' '}
-              <a href="mailto:legal@blokblok.studio" className="text-white hover:text-white/80 underline transition-colors">
-                legal@blokblok.studio
+              <a href="mailto:hello@blokblokstudio.com" className="text-white hover:text-white/80 underline transition-colors">
+                hello@blokblokstudio.com
               </a>
             </p>
           </div>

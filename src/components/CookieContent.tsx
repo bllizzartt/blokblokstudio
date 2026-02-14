@@ -24,7 +24,6 @@
 
 import { useTranslations } from 'next-intl';
 import { AnimatedSection } from './AnimatedSection';
-import { motion } from 'framer-motion';
 
 export function CookieContent() {
   const t = useTranslations('cookies');
@@ -71,8 +70,8 @@ export function CookieContent() {
             </p>
             <ul className="space-y-3 text-gray-400">
               <li className="flex items-start gap-3">
-                <span className="text-white/40 mt-1">•</span>
-                <span><strong className="text-white">Cookie Consent Preference:</strong> We use localStorage to remember whether you have accepted or declined cookies. This is essential for complying with GDPR and respecting your choice.</span>
+                <span className="text-white/40 mt-1">&bull;</span>
+                <span><strong className="text-white">Cookie Consent Preference:</strong> We use localStorage to remember your cookie preferences (essential, analytics, marketing categories). This is essential for complying with GDPR and respecting your choice.</span>
               </li>
             </ul>
             <p className="text-gray-400 leading-relaxed mt-4">
@@ -80,18 +79,55 @@ export function CookieContent() {
             </p>
             <ul className="space-y-2 text-gray-400 mt-2">
               <li className="flex items-start gap-3">
-                <span className="text-white/40 mt-1">•</span>
+                <span className="text-white/40 mt-1">&bull;</span>
                 <span>Analytics or tracking cookies (e.g., Google Analytics)</span>
               </li>
               <li className="flex items-start gap-3">
-                <span className="text-white/40 mt-1">•</span>
+                <span className="text-white/40 mt-1">&bull;</span>
                 <span>Advertising cookies</span>
               </li>
               <li className="flex items-start gap-3">
-                <span className="text-white/40 mt-1">•</span>
+                <span className="text-white/40 mt-1">&bull;</span>
                 <span>Third-party tracking scripts</span>
               </li>
             </ul>
+          </div>
+        </AnimatedSection>
+
+        {/* ==================================================================
+         * 3b. COOKIE / STORAGE TABLE
+         * ================================================================== */}
+        <AnimatedSection delay={0.17} className="mb-8 sm:mb-12">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8">
+            <h2 className="text-2xl font-bold mb-4">Cookie &amp; Storage Details</h2>
+            <p className="text-gray-400 leading-relaxed mb-4">
+              Below is a complete list of cookies and local storage items used on this website:
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-white font-medium py-3 pr-4">Name</th>
+                    <th className="text-white font-medium py-3 pr-4">Type</th>
+                    <th className="text-white font-medium py-3 pr-4">Purpose</th>
+                    <th className="text-white font-medium py-3 pr-4">Category</th>
+                    <th className="text-white font-medium py-3">Duration</th>
+                  </tr>
+                </thead>
+                <tbody className="text-gray-400">
+                  <tr className="border-b border-white/5">
+                    <td className="py-3 pr-4 font-mono text-xs text-gray-300">cookie-consent</td>
+                    <td className="py-3 pr-4">localStorage</td>
+                    <td className="py-3 pr-4">Stores your cookie preferences (essential, analytics, marketing)</td>
+                    <td className="py-3 pr-4">Essential</td>
+                    <td className="py-3">Persistent</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-gray-500 text-xs mt-4">
+              You can manage your cookie preferences at any time using the cookie banner. To reset preferences, clear your browser&apos;s localStorage.
+            </p>
           </div>
         </AnimatedSection>
 
@@ -152,8 +188,8 @@ export function CookieContent() {
             </p>
             <p className="text-gray-400 leading-relaxed">
               If you have questions about our use of cookies, please contact us at{' '}
-              <a href="mailto:privacy@blokblok.studio" className="text-white hover:text-white/80 underline transition-colors">
-                privacy@blokblok.studio
+              <a href="mailto:hello@blokblokstudio.com" className="text-white hover:text-white/80 underline transition-colors">
+                hello@blokblokstudio.com
               </a>
             </p>
           </div>
