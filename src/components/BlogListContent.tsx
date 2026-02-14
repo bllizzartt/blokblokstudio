@@ -6,6 +6,12 @@ import { motion } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
 
+const categoryColors: Record<string, string> = {
+  'Web Design': 'from-blue-600/30 to-indigo-900/30',
+  'SEO': 'from-green-600/30 to-emerald-900/30',
+  'Branding': 'from-purple-600/30 to-pink-900/30',
+};
+
 export function BlogListContent() {
   return (
     <section className="pt-24 sm:pt-32 pb-16 sm:pb-24 px-5 sm:px-6 lg:px-8">
@@ -30,17 +36,20 @@ export function BlogListContent() {
                   transition={{ duration: 0.3 }}
                   className="glass-card rounded-2xl sm:rounded-3xl overflow-hidden group cursor-pointer h-full flex flex-col"
                 >
-                  {/* Image */}
-                  <div className="aspect-[16/10] relative overflow-hidden">
+                  {/* Image area with gradient fallback */}
+                  <div className={`aspect-[16/10] relative overflow-hidden bg-gradient-to-br ${categoryColors[post.category] || 'from-gray-700/30 to-gray-900/30'}`}>
                     <Image
                       src={post.image}
-                      alt={post.title}
+                      alt=""
                       fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-500"
+                      sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      className="object-cover object-top group-hover:scale-105 transition-transform duration-500"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                    <div className="absolute top-4 left-4">
-                      <span className="px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm text-xs text-white font-medium">
+                    {/* Overlay to ensure readability */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/10" />
+                    {/* Category badge */}
+                    <div className="absolute top-4 left-4 z-10">
+                      <span className="px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm text-xs text-white font-medium border border-white/10">
                         {post.category}
                       </span>
                     </div>

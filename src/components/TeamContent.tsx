@@ -1,69 +1,3 @@
-/**
- * ============================================================================
- * TeamContent.tsx — Full /team Page Component
- * ============================================================================
- *
- * PURPOSE:
- *   Renders the entire Team page, including:
- *     1. A page header (title + subtitle)
- *     2. A responsive grid of team member cards
- *     3. Each card shows an avatar placeholder (initials), name, role,
- *        and hover-reveal social media links
- *
- * TEAM MEMBER DATA:
- *   All member data is hardcoded in the `teamMembers` array below.
- *   Each member has: name, roleKey (translation key), and initials.
- *
- * TRANSLATIONS:
- *   Text comes from the "team" namespace in your translation JSON files
- *   (e.g., messages/en.json under "team").
- *   Keys used:
- *     - team.title          → page heading
- *     - team.subtitle       → page subheading
- *     - team.role_ceo       → role label for CEO/Founder
- *     - team.role_creative  → role label for Creative Director
- *     - team.role_tech      → role label for Tech Lead
- *     - team.role_design    → role label for Lead Designer
- *     - team.role_marketing → role label for Marketing Lead
- *     - team.role_dev       → role label for Senior Developer
- *
- * TO EDIT TEXT:
- *   - Page title/subtitle → edit "team.title" / "team.subtitle" in translation files
- *   - Role labels → edit "team.role_*" keys in translation files
- *   - Member names → edit the `teamMembers` array below (names are hardcoded)
- *
- * TO ADD / REMOVE TEAM MEMBERS:
- *   Modify the `teamMembers` array below. Each entry needs:
- *     - name:    Display name (string)
- *     - roleKey: Translation key for the role (must exist in "team" namespace)
- *     - initials: 2-letter initials shown in the avatar placeholder
- *
- * TO REPLACE AVATAR PLACEHOLDERS WITH REAL PHOTOS:
- *   The avatar area currently shows a circle with initials on a gradient
- *   background. To use real photos, replace the initials circle with an
- *   <Image> component. See the inline comment in the avatar section below.
- *
- * SOCIAL LINKS:
- *   Currently all social links point to "#" (no real URLs). To add real
- *   URLs, you could extend the teamMembers array to include social link
- *   objects, then map over them instead of the hardcoded ['Twitter',
- *   'LinkedIn', 'Dribbble'] array. See the inline comment in the social
- *   links section.
- *
- * REFERENCED FILES / DEPENDENCIES:
- *   - ./AnimatedSection   → scroll-triggered reveal animation wrapper
- *   - next-intl           → i18n translation hook (useTranslations)
- *   - framer-motion       → animation library (motion.div for hover effects)
- *
- * STYLING:
- *   - Uses Tailwind CSS utility classes throughout.
- *   - "glass-card" is a custom utility class for the frosted-glass card look.
- *   - Responsive breakpoints: sm (640px), md (768px), lg (1024px).
- *   - Grid: 2 cols on mobile, 2 on sm, 3 on lg.
- *
- * ============================================================================
- */
-
 'use client';
 
 import { useTranslations } from 'next-intl';
@@ -71,67 +5,53 @@ import { AnimatedSection } from './AnimatedSection';
 import { motion } from 'framer-motion';
 
 /**
- * ---------------------------------------------------------------------------
- * Team Members Data Array (Hardcoded)
- * ---------------------------------------------------------------------------
- * Each member object contains:
- *   - name:     The member's display name (hardcoded string, not translated)
- *   - roleKey:  A translation key from the "team" namespace for the role title.
- *               Uses `as const` for TypeScript type narrowing with useTranslations.
- *   - initials: 2-character string shown in the avatar placeholder circle.
- *
- * TO ADD A NEW MEMBER:
- *   1. Add a new object to this array.
- *   2. Add a matching "team.role_xxx" key in your translation files.
- *
- * TO EDIT A MEMBER:
- *   Change the name, roleKey, or initials directly in this array.
- *
- * TO REMOVE A MEMBER:
- *   Delete the entire object from the array.
- * ---------------------------------------------------------------------------
+ * Team Members Data
+ * Each member includes bio details displayed in a codex/JSON-style card.
+ * To add a new member, add an entry here and a matching role key in locale files.
  */
 const teamMembers = [
-  { name: 'Alex Morgan', roleKey: 'role_ceo' as const, initials: 'AM' },
-  { name: 'Jordan Rivera', roleKey: 'role_creative' as const, initials: 'JR' },
-  { name: 'Sam Chen', roleKey: 'role_tech' as const, initials: 'SC' },
-  { name: 'Taylor Kim', roleKey: 'role_design' as const, initials: 'TK' },
-  { name: 'Morgan Blake', roleKey: 'role_marketing' as const, initials: 'MB' },
-  { name: 'Casey Wright', roleKey: 'role_dev' as const, initials: 'CW' },
+  {
+    name: 'Chase Haynes',
+    roleKey: 'role_founder' as const,
+    location: 'Berlin, Germany',
+    studied: ['Design and Technology', 'Parsons School of Design'],
+    enjoys: ['Art Museums', 'Traveling', 'Content Creation'],
+    socials: {
+      linkedin: 'https://www.linkedin.com/in/chase-haynes/',
+      instagram: 'https://www.instagram.com/haynes2va/',
+    },
+  },
+  {
+    name: 'Kyle Talley',
+    roleKey: 'role_graphic' as const,
+    location: 'Richmond, Virginia, USA',
+    studied: ['Creative Advertising', 'Virginia Commonwealth University'],
+    enjoys: ['Brazilian Jiu Jitsu', 'Animation', 'Thrifting'],
+    socials: {
+      linkedin: 'https://www.linkedin.com/in/kylebtalley/',
+      instagram: 'https://www.instagram.com/ta11ey_/',
+    },
+  },
+  {
+    name: 'Stephen Darling',
+    roleKey: 'role_web' as const,
+    location: 'Arlington, Virginia, USA',
+    studied: ['Interactive Design and Computer Science', 'James Madison University'],
+    enjoys: ['Movies', 'Film Photography', 'Cooking'],
+    socials: {
+      linkedin: '',
+      instagram: 'https://www.instagram.com/stephen.darling/',
+    },
+  },
 ];
 
-/**
- * ---------------------------------------------------------------------------
- * TeamContent Component
- * ---------------------------------------------------------------------------
- * Main export. Renders the full /team page layout with a grid of member cards.
- * ---------------------------------------------------------------------------
- */
 export function TeamContent() {
-  /**
-   * Translation hook — pulls all keys from the "team" namespace.
-   * To change any displayed text, edit your translation JSON files
-   * (e.g., messages/en.json → "team": { ... }).
-   */
   const t = useTranslations('team');
 
   return (
-    /**
-     * Outer section wrapper.
-     * - pt-24 / sm:pt-32 → top padding (room for the fixed navbar)
-     * - pb-16 / sm:pb-24 → bottom padding
-     * - px-5 / sm:px-6 / lg:px-8 → horizontal padding
-     */
     <section className="pt-24 sm:pt-32 pb-16 sm:pb-24 px-5 sm:px-6 lg:px-8">
-      {/* Max-width container — keeps content centered on wide screens */}
       <div className="max-w-7xl mx-auto">
-
-        {/* ================================================================
-            SECTION 1: Page Header (Title + Subtitle)
-            ================================================================
-            TO EDIT: Change "team.title" and "team.subtitle" in
-            your translation files.
-        */}
+        {/* Page Header */}
         <AnimatedSection className="text-center mb-14 sm:mb-20 lg:mb-24">
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-4 sm:mb-6">
             {t('title')}
@@ -141,115 +61,112 @@ export function TeamContent() {
           </p>
         </AnimatedSection>
 
-        {/* ================================================================
-            SECTION 2: Team Members Grid
-            ================================================================
-            Responsive grid: 2 columns on mobile/sm, 3 columns on lg.
-            Each card has a staggered entrance animation (delay = i * 0.1s).
-        */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+        {/* Team Members — Codex-style Bio Cards */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 max-w-6xl mx-auto">
           {teamMembers.map((member, i) => (
-            /* AnimatedSection wraps each card for scroll-triggered reveal */
-            <AnimatedSection key={i} delay={i * 0.1}>
-              {/*
-                motion.div adds a hover animation:
-                  - y: -8 → lifts the card up 8px on hover
-                The "group" class enables group-hover styles on child elements.
-              */}
+            <AnimatedSection key={i} delay={i * 0.15}>
               <motion.div
-                whileHover={{ y: -8 }}
+                whileHover={{ y: -6 }}
                 transition={{ duration: 0.3 }}
-                className="group"
+                className="h-full"
               >
-                <div className="glass-card rounded-2xl sm:rounded-3xl overflow-hidden">
+                <div className="relative h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-gradient-to-br from-gray-950 via-gray-900 to-purple-950/40 border border-white/5">
+                  {/* Subtle purple glow */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-purple-800/20 pointer-events-none" />
 
-                  {/* --------------------------------------------------------
-                      AVATAR / PHOTO AREA
-                      --------------------------------------------------------
-                      3:4 aspect ratio area with a gradient background.
-                      Currently shows initials in a circle as a placeholder.
-
-                      TO REPLACE WITH REAL PHOTOS:
-                        Replace the initials circle div with:
-                        <Image
-                          src={member.photo}
-                          alt={member.name}
-                          fill
-                          className="object-cover"
-                        />
-                        And add a `photo` field to each member in the
-                        teamMembers array above. Import Image from next/image.
-                  */}
-                  <div className="aspect-[3/4] bg-gradient-to-br from-gray-900 to-gray-800 relative overflow-hidden">
-                    {/* Subtle grid pattern overlay for visual texture */}
-                    <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:30px_30px]" />
-
-                    {/* Centered initials avatar circle */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-full border border-white/10 flex items-center justify-center group-hover:border-white/20 group-hover:scale-110 transition-all duration-500">
-                        {/* Member initials (e.g., "AM" for Alex Morgan) */}
-                        <span className="text-xl sm:text-2xl font-bold text-white/20 group-hover:text-white/40 transition-colors">
-                          {member.initials}
-                        </span>
-                      </div>
+                  <div className="relative p-6 sm:p-8 flex flex-col h-full">
+                    {/* Name & Role */}
+                    <div className="mb-6">
+                      <h2 className="text-2xl sm:text-3xl font-bold text-white mb-1">
+                        {member.name}
+                      </h2>
+                      <p className="text-gray-400 text-sm sm:text-base italic">
+                        {t(member.roleKey)}
+                      </p>
                     </div>
 
-                    {/* --------------------------------------------------------
-                        HOVER OVERLAY: Social Media Links
-                        --------------------------------------------------------
-                        A dark overlay that fades in on card hover, with social
-                        link buttons sliding up from the bottom.
+                    {/* Code Block — JSON-style bio */}
+                    <div className="font-mono text-sm flex-1">
+                      {/* Opening brace */}
+                      <p className="text-white/80 mb-4">{'{'}</p>
 
-                        CURRENT STATE:
-                          - All links point to "#" (no real URLs).
-                          - Shows first letter of each platform as the button content.
-
-                        TO ADD REAL SOCIAL LINKS:
-                          1. Extend teamMembers to include social URLs:
-                             { name: '...', ..., socials: {
-                               twitter: 'https://twitter.com/...',
-                               linkedin: 'https://linkedin.com/in/...',
-                               dribbble: 'https://dribbble.com/...',
-                             }}
-                          2. Replace the hardcoded ['Twitter', 'LinkedIn', 'Dribbble']
-                             array with Object.entries(member.socials) and use the
-                             URLs as href values.
-                    */}
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all duration-500 flex items-end justify-center pb-6">
-                      {/*
-                        Social buttons row.
-                        - opacity-0 → hidden by default
-                        - group-hover:opacity-100 → visible on card hover
-                        - translate-y-4 → starts shifted down
-                        - group-hover:translate-y-0 → slides up on hover
-                      */}
-                      <div className="flex gap-3 opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-500">
-                        {['Twitter', 'LinkedIn', 'Dribbble'].map((social) => (
-                          <a
-                            key={social}
-                            href="#"
-                            className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center hover:bg-white/10 transition-colors"
-                          >
-                            {/* Shows first letter of platform name (T, L, D) */}
-                            <span className="text-xs">{social[0]}</span>
-                          </a>
-                        ))}
+                      {/* Based in */}
+                      <div className="ml-4 mb-5">
+                        <p className="text-gray-500 italic text-xs mb-1">&lt;Based in&gt;</p>
+                        <p className="text-white font-semibold ml-6 text-sm sm:text-base font-sans">
+                          {member.location}
+                        </p>
                       </div>
-                    </div>
-                  </div>
 
-                  {/* --------------------------------------------------------
-                      MEMBER INFO: Name + Role
-                      --------------------------------------------------------
-                      Displayed below the avatar area.
-                      - Name: hardcoded in teamMembers array
-                      - Role: pulled from translations via member.roleKey
-                  */}
-                  <div className="p-3 sm:p-6 text-center">
-                    {/* Member name (hardcoded, not translated) */}
-                    <h3 className="text-sm sm:text-lg font-semibold mb-0.5 sm:mb-1">{member.name}</h3>
-                    {/* Role title from translation key (e.g., "team.role_ceo") */}
-                    <p className="text-xs sm:text-sm text-gray-500">{t(member.roleKey)}</p>
+                      {/* Studied */}
+                      {member.studied.length > 0 && (
+                        <div className="ml-4 mb-5">
+                          <p className="text-gray-500 italic text-xs mb-1">&lt;Studied&gt;</p>
+                          {member.studied.map((item, idx) => (
+                            <p
+                              key={idx}
+                              className="text-white font-semibold ml-6 text-sm sm:text-base font-sans"
+                            >
+                              {item}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Enjoys */}
+                      <div className="ml-4 mb-4">
+                        <p className="text-gray-500 italic text-xs mb-1">&lt;Enjoys&gt;</p>
+                        {member.enjoys.length > 0 ? (
+                          member.enjoys.map((item, idx) => (
+                            <p
+                              key={idx}
+                              className="text-white font-semibold ml-6 text-sm sm:text-base font-sans"
+                            >
+                              {item}
+                            </p>
+                          ))
+                        ) : (
+                          <div className="ml-6">
+                            <p className="text-white/30">-</p>
+                            <p className="text-white/30">-</p>
+                            <p className="text-white/30">-</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Closing brace */}
+                      <p className="text-white/80">{'}'}</p>
+                    </div>
+
+                    {/* Social Links */}
+                    <div className="flex gap-3 mt-6 pt-6 border-t border-white/5">
+                      {member.socials.linkedin && (
+                        <a
+                          href={member.socials.linkedin}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`${member.name} on LinkedIn`}
+                          className="w-9 h-9 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/10 hover:border-white/20 transition-all"
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                          </svg>
+                        </a>
+                      )}
+                      {member.socials.instagram && (
+                        <a
+                          href={member.socials.instagram}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`${member.name} on Instagram`}
+                          className="w-9 h-9 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/10 hover:border-white/20 transition-all"
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
+                          </svg>
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </div>
               </motion.div>

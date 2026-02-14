@@ -93,12 +93,9 @@
   "team": {
     "title": "我们的团队",
     "subtitle": "认识 Blok Blok Studio 背后的创意人才。",
-    "role_ceo": "首席执行官兼创始人",
-    "role_creative": "创意总监",
-    "role_tech": "技术负责人",
-    "role_design": "首席设计师",
-    "role_marketing": "市场总监",
-    "role_dev": "高级开发工程师"
+    "role_founder": "Founder",
+    "role_graphic": "Senior Graphic Designer",
+    "role_web": "Senior Web Designer"
   },
   "contact": {
     "title": "联系我们",

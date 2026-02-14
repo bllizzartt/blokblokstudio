@@ -17,7 +17,7 @@ export function OrganizationSchema() {
     },
     sameAs: [
       'https://twitter.com/blokblokstudio',
-      'https://instagram.com/blokblokstudio',
+      'https://www.instagram.com/blokblokstudio/',
       'https://linkedin.com/company/blokblokstudio',
       'https://dribbble.com/blokblokstudio',
     ],

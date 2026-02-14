@@ -93,12 +93,9 @@
   "team": {
     "title": "Наша команда",
     "subtitle": "Познакомьтесь с творческими умами Blok Blok Studio.",
-    "role_ceo": "Генеральный директор и основатель",
-    "role_creative": "Креативный директор",
-    "role_tech": "Технический руководитель",
-    "role_design": "Ведущий дизайнер",
-    "role_marketing": "Директор по маркетингу",
-    "role_dev": "Старший разработчик"
+    "role_founder": "Founder",
+    "role_graphic": "Senior Graphic Designer",
+    "role_web": "Senior Web Designer"
   },
   "contact": {
     "title": "Свяжитесь с нами",

@@ -93,12 +93,9 @@
   "team": {
     "title": "팀 소개",
     "subtitle": "Blok Blok Studio를 이끄는 크리에이티브 인재들을 만나보세요.",
-    "role_ceo": "CEO 겸 창립자",
-    "role_creative": "크리에이티브 디렉터",
-    "role_tech": "기술 리드",
-    "role_design": "리드 디자이너",
-    "role_marketing": "마케팅 디렉터",
-    "role_dev": "시니어 개발자"
+    "role_founder": "Founder",
+    "role_graphic": "Senior Graphic Designer",
+    "role_web": "Senior Web Designer"
   },
   "contact": {
     "title": "문의하기",

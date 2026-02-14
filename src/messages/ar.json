@@ -93,12 +93,9 @@
   "team": {
     "title": "فريقنا",
     "subtitle": "تعرف على العقول المبدعة وراء Blok Blok Studio.",
-    "role_ceo": "الرئيس التنفيذي والمؤسس",
-    "role_creative": "المدير الإبداعي",
-    "role_tech": "قائد التقنية",
-    "role_design": "كبير المصممين",
-    "role_marketing": "مدير التسويق",
-    "role_dev": "مطور أول"
+    "role_founder": "Founder",
+    "role_graphic": "Senior Graphic Designer",
+    "role_web": "Senior Web Designer"
   },
   "contact": {
     "title": "تواصل معنا",

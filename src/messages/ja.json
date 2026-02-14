@@ -93,12 +93,9 @@
   "team": {
     "title": "チーム紹介",
     "subtitle": "Blok Blok Studioの背後にあるクリエイティブな才能をご紹介します。",
-    "role_ceo": "CEO＆創業者",
-    "role_creative": "クリエイティブディレクター",
-    "role_tech": "テックリード",
-    "role_design": "リードデザイナー",
-    "role_marketing": "マーケティングディレクター",
-    "role_dev": "シニアデベロッパー"
+    "role_founder": "Founder",
+    "role_graphic": "Senior Graphic Designer",
+    "role_web": "Senior Web Designer"
   },
   "contact": {
     "title": "お問い合わせ",

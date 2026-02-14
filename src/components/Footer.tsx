@@ -108,8 +108,8 @@ export function Footer() {
    *   Add or delete an object from this array.
    * -------------------------------------------------------------------------- */
   const socials = [
+    { label: 'Instagram', href: 'https://www.instagram.com/blokblokstudio/' },
     { label: 'Twitter / X', href: '#' },
-    { label: 'Instagram', href: '#' },
     { label: 'LinkedIn', href: '#' },
     { label: 'Dribbble', href: '#' },
   ];

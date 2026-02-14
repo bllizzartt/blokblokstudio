@@ -93,12 +93,9 @@
   "team": {
     "title": "Notre Équipe",
     "subtitle": "Rencontrez les esprits créatifs derrière Blok Blok Studio.",
-    "role_ceo": "PDG et Fondateur",
-    "role_creative": "Directeur Créatif",
-    "role_tech": "Responsable Technique",
-    "role_design": "Designer Principal",
-    "role_marketing": "Directeur Marketing",
-    "role_dev": "Développeur Senior"
+    "role_founder": "Founder",
+    "role_graphic": "Senior Graphic Designer",
+    "role_web": "Senior Web Designer"
   },
   "contact": {
     "title": "Contactez-Nous",
