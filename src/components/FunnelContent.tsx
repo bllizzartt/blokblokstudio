@@ -488,6 +488,13 @@ function AuditForm() {
   };
 
   if (submitted) {
+    const exploreLinks = [
+      { label: 'Our Projects', href: '/projects', icon: '🎨', desc: 'See our latest work' },
+      { label: 'Services', href: '/services', icon: '⚡', desc: 'What we can do for you' },
+      { label: 'Blog', href: '/blog', icon: '📖', desc: 'Tips & insights' },
+      { label: 'Meet the Team', href: '/team', icon: '👋', desc: 'The people behind the work' },
+    ];
+
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -500,10 +507,28 @@ function AuditForm() {
           </svg>
         </div>
         <h3 className="text-2xl sm:text-3xl font-bold mb-3">You&apos;re In!</h3>
-        <p className="text-gray-400 text-base sm:text-lg max-w-md mx-auto mb-6">
+        <p className="text-gray-400 text-base sm:text-lg max-w-md mx-auto mb-2">
           We&apos;ll send your personalized audit to <strong className="text-white">{formData.email}</strong> within 24 hours.
         </p>
-        <p className="text-sm text-gray-500">Keep an eye on your inbox (check spam too).</p>
+        <p className="text-sm text-gray-500 mb-10">Keep an eye on your inbox (check spam too).</p>
+
+        {/* Explore the site */}
+        <div className="border-t border-white/10 pt-10">
+          <p className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-6">While you wait, explore our site</p>
+          <div className="grid grid-cols-2 gap-3 max-w-md mx-auto">
+            {exploreLinks.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className="group flex flex-col items-center gap-2 p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-orange-500/30 hover:bg-white/[0.06] transition-all"
+              >
+                <span className="text-2xl">{link.icon}</span>
+                <span className="text-sm font-medium text-white group-hover:text-orange-400 transition-colors">{link.label}</span>
+                <span className="text-xs text-gray-500">{link.desc}</span>
+              </a>
+            ))}
+          </div>
+        </div>
       </motion.div>
     );
   }
