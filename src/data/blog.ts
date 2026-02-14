@@ -6,6 +6,8 @@ export interface BlogPost {
   readTime: string;
   category: string;
   image: string;
+  gradient: string;
+  icon: string;
   content: string;
 }
 
@@ -17,7 +19,9 @@ export const blogPosts: BlogPost[] = [
     date: '2026-02-14',
     readTime: '5 min read',
     category: 'Web Design',
-    image: '/images/projects/coachkofi.png',
+    image: '/og-image.jpg',
+    gradient: 'from-blue-600 via-indigo-700 to-purple-800',
+    icon: '🌐',
     content: `
 Your website has about 3 seconds to make an impression. If it fails, visitors leave — and they rarely come back. Here's what's driving them away and how to fix it.
 
@@ -65,7 +69,9 @@ Book a free audit with our team and we'll show you exactly what's holding your s
     date: '2026-02-10',
     readTime: '7 min read',
     category: 'SEO',
-    image: '/images/projects/newschool.png',
+    image: '/og-image.jpg',
+    gradient: 'from-emerald-600 via-green-700 to-teal-800',
+    icon: '📈',
     content: `
 SEO in 2026 is about speed, structure, and user experience. Here's everything you need to check off to give your site the best chance at ranking.
 
@@ -115,7 +121,9 @@ SEO isn't a one-time project — it's an ongoing practice. But getting the funda
     date: '2026-02-05',
     readTime: '4 min read',
     category: 'Branding',
-    image: '/images/projects/exoticripz.png',
+    image: '/og-image.jpg',
+    gradient: 'from-purple-600 via-fuchsia-700 to-pink-800',
+    icon: '✨',
     content: `
 Most businesses think branding is just a logo and some colors. But a strong brand identity is the single most valuable asset your business can own.
 
