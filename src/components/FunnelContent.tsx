@@ -974,7 +974,7 @@ export function FunnelContent() {
       {/* ================================================================
        * 3. HERO — Bold headline with visual background
        * ================================================================ */}
-      <section className="relative py-16 sm:py-20 lg:py-28 px-5 sm:px-6 text-center overflow-hidden">
+      <section className="relative pt-10 sm:pt-14 lg:pt-16 pb-16 sm:pb-20 lg:pb-24 px-5 sm:px-6 text-center overflow-hidden">
         {/* Animated background orbs */}
         <motion.div
           className="absolute top-1/4 left-1/4 w-[600px] h-[600px] rounded-full bg-orange-500/[0.04] blur-[120px]"
@@ -1568,7 +1568,7 @@ export function FunnelContent() {
        * 14. FREE AUDIT — Lead capture form
        * Connected to /api/audit → Prisma DB + Email + Telegram notifications
        * ================================================================ */}
-      <section id="audit" className="scroll-mt-8 py-20 sm:py-28 lg:py-36 px-5 sm:px-6 relative overflow-hidden">
+      <section id="audit" className="scroll-mt-24 pt-14 sm:pt-16 lg:pt-20 pb-20 sm:pb-28 lg:pb-36 px-5 sm:px-6 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-orange-500/[0.03] via-red-500/[0.015] to-transparent" />
         <motion.div
           className="absolute top-1/4 right-0 w-[500px] h-[500px] rounded-full bg-orange-500/[0.03] blur-[120px]"
