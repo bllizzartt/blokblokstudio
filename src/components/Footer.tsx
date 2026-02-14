@@ -271,24 +271,32 @@ export function Footer() {
                 Subscribed!
               </p>
             ) : (
-              <form
-                className="flex flex-col sm:flex-row gap-2"
-                onSubmit={handleFooterNewsletter}
-              >
-                <input
-                  type="email"
-                  name="email"
-                  required
-                  placeholder={t('newsletter_placeholder')}
-                  className="flex-1 min-w-0 px-4 py-2.5 rounded-full bg-white/5 border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-colors"
-                />
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-full bg-white text-black text-sm font-medium hover:bg-gray-200 transition-colors whitespace-nowrap"
+              <>
+                <form
+                  className="flex flex-col sm:flex-row gap-2"
+                  onSubmit={handleFooterNewsletter}
                 >
-                  {t('newsletter_button')}
-                </button>
-              </form>
+                  <input
+                    type="email"
+                    name="email"
+                    required
+                    placeholder={t('newsletter_placeholder')}
+                    className="flex-1 min-w-0 px-4 py-2.5 rounded-full bg-white/5 border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-colors"
+                  />
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 rounded-full bg-white text-black text-sm font-medium hover:bg-gray-200 transition-colors whitespace-nowrap"
+                  >
+                    {t('newsletter_button')}
+                  </button>
+                </form>
+                <p className="text-xs text-gray-600 mt-2">
+                  By subscribing, you agree to our{' '}
+                  <Link href="/privacy" className="text-gray-500 hover:text-white underline transition-colors">
+                    Privacy Policy
+                  </Link>. Unsubscribe anytime.
+                </p>
+              </>
             )}
           </div>
         </div>

@@ -25,7 +25,6 @@
 
 import { useTranslations } from 'next-intl';
 import { AnimatedSection } from './AnimatedSection';
-import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 export function PrivacyContent() {
@@ -210,9 +209,75 @@ export function PrivacyContent() {
         </AnimatedSection>
 
         {/* ==================================================================
-         * 8. CONTACT INFORMATION
+         * 8. LEGAL BASIS FOR PROCESSING
          * ================================================================== */}
-        <AnimatedSection delay={0.4}>
+        <AnimatedSection delay={0.4} className="mb-8 sm:mb-12">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8">
+            <h2 className="text-2xl font-bold mb-4">Legal Basis for Processing</h2>
+            <p className="text-gray-400 leading-relaxed mb-4">
+              Under Article 6 of the GDPR, we process your personal data based on the following legal grounds:
+            </p>
+            <ul className="space-y-3 text-gray-400">
+              <li className="flex items-start gap-3">
+                <span className="text-white/40 mt-1">&bull;</span>
+                <span><strong className="text-white">Consent (Art. 6(1)(a)):</strong> When you subscribe to our newsletter or submit a contact form with explicit consent</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-white/40 mt-1">&bull;</span>
+                <span><strong className="text-white">Contractual Necessity (Art. 6(1)(b)):</strong> When processing is necessary to fulfill a service agreement with you</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-white/40 mt-1">&bull;</span>
+                <span><strong className="text-white">Legitimate Interest (Art. 6(1)(f)):</strong> For internal analytics, improving our services, and protecting the security of our website</span>
+              </li>
+            </ul>
+            <p className="text-gray-400 leading-relaxed mt-4">
+              You may withdraw your consent at any time without affecting the lawfulness of processing carried out before withdrawal.
+            </p>
+          </div>
+        </AnimatedSection>
+
+        {/* ==================================================================
+         * 9. INTERNATIONAL DATA TRANSFERS
+         * ================================================================== */}
+        <AnimatedSection delay={0.45} className="mb-8 sm:mb-12">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8">
+            <h2 className="text-2xl font-bold mb-4">International Data Transfers</h2>
+            <p className="text-gray-400 leading-relaxed mb-4">
+              Some of our third-party service providers may process your data outside the European Economic Area (EEA). When this occurs, we ensure appropriate safeguards are in place:
+            </p>
+            <ul className="space-y-3 text-gray-400">
+              <li className="flex items-start gap-3">
+                <span className="text-white/40 mt-1">&bull;</span>
+                <span><strong className="text-white">Vercel:</strong> Our hosting provider may process data in the United States. Vercel complies with applicable data protection frameworks.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-white/40 mt-1">&bull;</span>
+                <span><strong className="text-white">Resend:</strong> Our email delivery provider may process data in the United States. Transfers are covered by Standard Contractual Clauses (SCCs).</span>
+              </li>
+            </ul>
+            <p className="text-gray-400 leading-relaxed mt-4">
+              We only transfer data to countries or organizations that provide an adequate level of protection or where appropriate safeguards (such as SCCs or binding corporate rules) are in place.
+            </p>
+          </div>
+        </AnimatedSection>
+
+        {/* ==================================================================
+         * 10. SUPERVISORY AUTHORITY
+         * ================================================================== */}
+        <AnimatedSection delay={0.5} className="mb-8 sm:mb-12">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8">
+            <h2 className="text-2xl font-bold mb-4">Supervisory Authority</h2>
+            <p className="text-gray-400 leading-relaxed">
+              If you believe that our processing of your personal data violates the GDPR, you have the right to lodge a complaint with a supervisory authority in the EU member state of your habitual residence, place of work, or place of the alleged infringement. You may also contact us first so we can try to resolve the issue directly.
+            </p>
+          </div>
+        </AnimatedSection>
+
+        {/* ==================================================================
+         * 11. CONTACT INFORMATION
+         * ================================================================== */}
+        <AnimatedSection delay={0.55}>
           <div className="bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8">
             <h2 className="text-2xl font-bold mb-4">Contact Us</h2>
             <p className="text-gray-400 leading-relaxed mb-4">

@@ -160,9 +160,12 @@ export function HomeNewsletter() {
                     </motion.button>
                   </form>
 
-                  {/* Privacy note */}
-                  <p className="text-xs text-gray-600 mt-4">
-                    {t('newsletter_privacy')}
+                  {/* Privacy consent note */}
+                  <p className="text-xs text-gray-500 mt-4">
+                    By subscribing, you agree to our{' '}
+                    <a href="/privacy" className="text-gray-400 hover:text-white underline transition-colors">
+                      Privacy Policy
+                    </a>. Unsubscribe anytime.
                   </p>
                 </>
               )}

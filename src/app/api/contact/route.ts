@@ -7,7 +7,9 @@ import { prisma } from '@/lib/prisma';
  */
 export async function POST(req: NextRequest) {
   try {
-    const { name, email, company, message } = await req.json();
+    const { name, email, company, message, consent } = await req.json();
+    const forwarded = req.headers.get('x-forwarded-for');
+    const consentIp = forwarded ? forwarded.split(',')[0].trim() : 'unknown';
 
     if (!name || !email || !message) {
       return NextResponse.json({ error: 'Name, email, and message are required' }, { status: 400 });
@@ -25,6 +27,9 @@ export async function POST(req: NextRequest) {
           problem: message,
           website: company || existingLead.website,
           source: 'contact',
+          consentGiven: consent === true,
+          consentTimestamp: new Date(),
+          consentIp,
         },
       });
     } else {
@@ -36,6 +41,9 @@ export async function POST(req: NextRequest) {
           website: company || null,
           problem: message,
           source: 'contact',
+          consentGiven: consent === true,
+          consentTimestamp: new Date(),
+          consentIp,
         },
       });
     }

@@ -104,6 +104,7 @@ export function ContactContent() {
           email: formData.get('email'),
           company: formData.get('company'),
           message: formData.get('message'),
+          consent: true,
         }),
         headers: { 'Content-Type': 'application/json' },
       });
@@ -265,6 +266,23 @@ export function ContactContent() {
                     className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 text-sm sm:text-base text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-colors resize-none"
                     placeholder={t('message')}
                   />
+                </div>
+
+                {/* GDPR Consent Checkbox (required) */}
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    name="consent"
+                    id="consent"
+                    required
+                    className="mt-1 h-4 w-4 rounded border-white/20 bg-white/5 text-white accent-white cursor-pointer"
+                  />
+                  <label htmlFor="consent" className="text-sm text-gray-400 leading-relaxed cursor-pointer">
+                    I agree to the processing of my personal data as described in the{' '}
+                    <a href="/privacy" target="_blank" className="text-white hover:text-white/80 underline transition-colors">
+                      Privacy Policy
+                    </a>.
+                  </label>
                 </div>
 
                 {error && (
